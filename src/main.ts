@@ -8,13 +8,17 @@ import {
 } from "./render/lbm-shader";
 import { createDisplayProgram, runDisplay } from "./render/colormap-shader";
 import { generateCircleMask } from "./shapes/rasterize";
-import { createControlsPanel, SimConfig } from "./ui/controls-panel";
+import { generateFlatPlate, generateNACA0012 } from "./shapes/airfoil";
+import { createControlsPanel, SimConfig, ShapeKind } from "./ui/controls-panel";
 import { createReadoutPanel, updateReadout } from "./ui/readout-panel";
 import { Q, E, W, CS2 } from "./solver/constants";
 
 const NX = 200;
 const NY = 80;
 const CIRCLE_RADIUS = 12;
+const CHORD = 24;
+const SHAPE_CX = 55;
+const SHAPE_CY = 40;
 const MAX_SPEED = 0.25;
 const STEPS_PER_FRAME = 5;
 
@@ -26,7 +30,9 @@ const streamProg = createStreamProgram(gl);
 createDisplayProgram(gl);
 const pp = createPingPong(gl, NX, NY);
 
-let solid = generateCircleMask(50, 40, CIRCLE_RADIUS, NX, NY);
+let shapeKind: ShapeKind = "circle";
+let aoaDeg = 0;
+let solid = generateCircleMask(SHAPE_CX, SHAPE_CY, CIRCLE_RADIUS, NX, NY);
 let solidTex = createSolidTexture(solid);
 
 function createSolidTexture(solid: boolean[]): WebGLTexture {
@@ -66,6 +72,19 @@ function initTextures(uInlet: number): void {
   }
 }
 
+function regenerateSolid(): void {
+  if (shapeKind === "circle") {
+    solid = generateCircleMask(SHAPE_CX, SHAPE_CY, CIRCLE_RADIUS, NX, NY);
+  } else if (shapeKind === "flat-plate") {
+    solid = generateFlatPlate(SHAPE_CX, SHAPE_CY, CHORD, aoaDeg, NX, NY);
+  } else {
+    solid = generateNACA0012(SHAPE_CX, SHAPE_CY, CHORD, aoaDeg, NX, NY);
+  }
+  gl.activeTexture(gl.TEXTURE3);
+  gl.deleteTexture(solidTex);
+  solidTex = createSolidTexture(solid);
+}
+
 let uInlet = 0.1;
 let tau = 0.55;
 let omega = 1 / tau;
@@ -73,11 +92,16 @@ let omega = 1 / tau;
 const config: SimConfig = {
   uInlet,
   tau,
+  shapeKind,
+  aoaDeg,
   shapeRadius: CIRCLE_RADIUS,
   onUpdate: () => {
     uInlet = config.uInlet;
     tau = config.tau;
     omega = 1 / tau;
+    shapeKind = config.shapeKind;
+    aoaDeg = config.aoaDeg;
+    regenerateSolid();
     initTextures(uInlet);
   },
 };
@@ -107,10 +131,11 @@ function computeForces(): { drag: number; lift: number } {
   let fx = 0;
   let fy = 0;
 
-  const minX = Math.max(0, 50 - CIRCLE_RADIUS - 2);
-  const maxX = Math.min(NX - 1, 50 + CIRCLE_RADIUS + 2);
-  const minY = Math.max(0, 40 - CIRCLE_RADIUS - 2);
-  const maxY = Math.min(NY - 1, 40 + CIRCLE_RADIUS + 2);
+  const extent = shapeKind === "circle" ? CIRCLE_RADIUS + 2 : CHORD / 2 + 4;
+  const minX = Math.max(0, SHAPE_CX - extent);
+  const maxX = Math.min(NX - 1, SHAPE_CX + extent);
+  const minY = Math.max(0, SHAPE_CY - extent);
+  const maxY = Math.min(NY - 1, SHAPE_CY + extent);
 
   for (let y = minY; y <= maxY; y++) {
     for (let x = minX; x <= maxX; x++) {

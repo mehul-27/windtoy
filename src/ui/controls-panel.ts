@@ -1,6 +1,10 @@
+export type ShapeKind = "circle" | "flat-plate" | "naca-airfoil";
+
 export interface SimConfig {
   uInlet: number;
   tau: number;
+  shapeKind: ShapeKind;
+  aoaDeg: number;
   shapeRadius: number;
   onUpdate: () => void;
 }
@@ -61,13 +65,42 @@ export function createControlsPanel(config: SimConfig): HTMLDivElement {
     return input;
   }
 
+  const charLen = config.shapeRadius * 2;
+
+  const selRow = document.createElement("div");
+  selRow.style.cssText = "margin-bottom:6px";
+  const selLbl = document.createElement("div");
+  selLbl.textContent = "Shape";
+  selLbl.style.cssText = "margin-bottom:2px";
+  const sel = document.createElement("select");
+  sel.style.cssText = "width:100%;background:#333;color:#ddd;border:1px solid #555;border-radius:3px;padding:2px 4px;font:12px monospace";
+  const opts = ["circle", "flat-plate", "naca-airfoil"];
+  for (const o of opts) {
+    const opt = document.createElement("option");
+    opt.value = o;
+    opt.textContent = o;
+    if (o === config.shapeKind) opt.selected = true;
+    sel.appendChild(opt);
+  }
+  sel.addEventListener("change", () => {
+    config.shapeKind = sel.value as ShapeKind;
+    config.onUpdate();
+  });
+  selRow.appendChild(selLbl);
+  selRow.appendChild(sel);
+  panel.appendChild(selRow);
+
+  addSlider(
+    "AoA (deg)", -20, 20, 0.5, config.aoaDeg,
+    (v) => v.toFixed(1) + "°",
+    (v) => { config.aoaDeg = v; config.onUpdate(); },
+  );
+
   addSlider(
     "Inlet speed", 0.01, 0.25, 0.001, config.uInlet,
     (v) => v.toFixed(3),
     (v) => { config.uInlet = v; config.onUpdate(); },
   );
-
-  const charLen = config.shapeRadius * 2;
 
   addSlider(
     "Reynolds #", 1, 200, 1,
