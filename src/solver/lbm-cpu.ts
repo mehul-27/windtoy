@@ -169,3 +169,41 @@ export function step(state: LBMState, solid?: boolean[]): void {
   state._fNew = state.f;
   state.f = fNew;
 }
+
+export function computeForces(state: LBMState, solid: boolean[]): { drag: number; lift: number } {
+  const { f, nx, ny, tau } = state;
+  const omega = 1 / tau;
+  let fx = 0, fy = 0;
+  for (let y = 0; y < ny; y++) {
+    for (let x = 0; x < nx; x++) {
+      const ci = y * nx + x;
+      if (solid[ci]) continue;
+      let isBoundary = false;
+      for (let d = 0; d < Q; d++) {
+        const nx2 = x + E[d][0], ny2 = y + E[d][1];
+        if (nx2 >= 0 && nx2 < nx && ny2 >= 0 && ny2 < ny && solid[ny2 * nx + nx2]) {
+          isBoundary = true; break;
+        }
+      }
+      if (!isBoundary) continue;
+      let rho = 0, ux = 0, uy = 0;
+      for (let d = 0; d < Q; d++) {
+        const fi = f[idx(nx, x, y, d)];
+        rho += fi; ux += fi * E[d][0]; uy += fi * E[d][1];
+      }
+      if (rho <= 0) continue;
+      ux /= rho; uy /= rho;
+      const usq = ux * ux + uy * uy;
+      for (let d = 0; d < Q; d++) {
+        const nx2 = x + E[d][0], ny2 = y + E[d][1];
+        if (!(nx2 >= 0 && nx2 < nx && ny2 >= 0 && ny2 < ny && solid[ny2 * nx + nx2])) continue;
+        const eiux = E[d][0] * ux + E[d][1] * uy;
+        const feq = W[d] * rho * (1 + eiux / CS2 + (eiux * eiux) / (2 * CS2 * CS2) - usq / (2 * CS2));
+        const fPost = f[idx(nx, x, y, d)] + omega * (feq - f[idx(nx, x, y, d)]);
+        fx += 2 * fPost * E[d][0];
+        fy += 2 * fPost * E[d][1];
+      }
+    }
+  }
+  return { drag: fx, lift: -fy };
+}

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { createState, step, macroscopic } from "./lbm-cpu";
+import { createState, step, macroscopic, computeForces } from "./lbm-cpu";
 import { generateCircleMask } from "../shapes/rasterize";
+import { generateNACA0012 } from "../shapes/airfoil";
 
 describe("CPU reference solver", () => {
   const NX = 50;
@@ -98,5 +99,38 @@ describe("Cylinder wake", () => {
       expect(signChanges).toBeGreaterThan(2);
     },
     180_000,
+  );
+});
+
+describe("NACA airfoil lift", () => {
+  const NX = 120;
+  const NY = 50;
+  const CX = 35;
+  const CY = 25;
+  const CHORD = 24;
+
+  it(
+    "lift increases with angle of attack (§9 test 4)",
+    () => {
+      const TAU = 0.6;
+      const U_INLET = 0.05;
+      const STEPS = 4000;
+
+      const lifts: number[] = [];
+      for (const aoa of [2, 6, 10]) {
+        const state = createState(NX, NY, TAU, U_INLET);
+        const solid = generateNACA0012(CX, CY, CHORD, aoa, NX, NY);
+        for (let s = 0; s < STEPS; s++) {
+          step(state, solid);
+        }
+        const { lift } = computeForces(state, solid);
+        lifts.push(lift);
+      }
+
+      expect(lifts[0]).toBeGreaterThan(0);
+      expect(lifts[2]).toBeGreaterThan(lifts[1]);
+      expect(lifts[1]).toBeGreaterThan(lifts[0]);
+    },
+    300_000,
   );
 });

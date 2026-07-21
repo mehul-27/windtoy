@@ -201,7 +201,7 @@ function computeForces(): { drag: number; lift: number } {
       }
     }
   }
-  return { drag: fx, lift: fy };
+  return { drag: fx, lift: -fy };
 }
 
 function resizeVecCanvas(): void {

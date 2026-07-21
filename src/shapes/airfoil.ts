@@ -40,7 +40,7 @@ export function generateNACA0012(
     for (let x = 0; x < nx; x++) {
       const dx = x - cx;
       const dy = y - cy;
-      const lx = dx * cosA + dy * sinA + chord / 2;
+      const lx = dx * cosA + dy * sinA + chord * 0.25;
       const ly = -dx * sinA + dy * cosA;
       if (lx < 0 || lx > chord) continue;
       const xc = lx / chord;
