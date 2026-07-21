@@ -11,6 +11,7 @@ uniform sampler2D u_f1;
 uniform sampler2D u_f2;
 uniform sampler2D u_solid;
 uniform vec2 u_texScale;
+uniform vec2 u_invScreen;
 uniform float u_maxSpeed;
 
 out vec4 outColor;
@@ -33,8 +34,8 @@ vec3 colormap(float t) {
   }
 }
 
-bool isSolid(ivec2 p) {
-  return texelFetch(u_solid, p, 0).r > 0.5;
+bool isSolid(vec2 uv) {
+  return texture(u_solid, uv).r > 0.5;
 }
 
 vec2 calcVel(ivec2 p) {
@@ -51,9 +52,10 @@ vec2 calcVel(ivec2 p) {
 }
 
 void main() {
+  vec2 uv = gl_FragCoord.xy * u_invScreen;
   ivec2 p = ivec2(gl_FragCoord.xy * u_texScale);
 
-  if (isSolid(p)) {
+  if (isSolid(uv)) {
     outColor = vec4(0.25, 0.25, 0.26, 1.0);
     return;
   }
@@ -73,6 +75,7 @@ let u_f1: WebGLUniformLocation | null = null;
 let u_f2: WebGLUniformLocation | null = null;
 let u_solid: WebGLUniformLocation | null = null;
 let u_texScale: WebGLUniformLocation | null = null;
+let u_invScreen: WebGLUniformLocation | null = null;
 let u_maxSpeed: WebGLUniformLocation | null = null;
 
 function compile(gl: WebGL2RenderingContext, type: number, src: string): WebGLShader {
@@ -98,13 +101,14 @@ export function createDisplayProgram(gl: WebGL2RenderingContext): void {
   u_f2 = gl.getUniformLocation(displayProg, "u_f2");
   u_solid = gl.getUniformLocation(displayProg, "u_solid");
   u_texScale = gl.getUniformLocation(displayProg, "u_texScale");
+  u_invScreen = gl.getUniformLocation(displayProg, "u_invScreen");
   u_maxSpeed = gl.getUniformLocation(displayProg, "u_maxSpeed");
 }
 
 export function runDisplay(
   gl: WebGL2RenderingContext,
   ppRead: { tex: [WebGLTexture, WebGLTexture, WebGLTexture] },
-  solidTex: WebGLTexture | null,
+  solidTexDisplay: WebGLTexture | null,
   nx: number,
   ny: number,
   canvasW: number,
@@ -125,10 +129,11 @@ export function runDisplay(
   gl.bindTexture(gl.TEXTURE_2D, ppRead.tex[2]);
   gl.uniform1i(u_f2!, 2);
   gl.activeTexture(gl.TEXTURE3);
-  gl.bindTexture(gl.TEXTURE_2D, solidTex);
+  gl.bindTexture(gl.TEXTURE_2D, solidTexDisplay);
   gl.uniform1i(u_solid!, 3);
 
   gl.uniform2f(u_texScale!, nx / canvasW, ny / canvasH);
+  gl.uniform2f(u_invScreen!, 1 / canvasW, 1 / canvasH);
   gl.uniform1f(u_maxSpeed!, maxSpeed);
 
   gl.disable(gl.BLEND);

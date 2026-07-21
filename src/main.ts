@@ -13,12 +13,12 @@ import { createControlsPanel, SimConfig, ShapeKind } from "./ui/controls-panel";
 import { createReadoutPanel, updateReadout } from "./ui/readout-panel";
 import { Q, E, W, CS2 } from "./solver/constants";
 
-const NX = 200;
-const NY = 80;
-const CIRCLE_RADIUS = 12;
-const CHORD = 24;
-const SHAPE_CX = 55;
-const SHAPE_CY = 40;
+const NX = 400;
+const NY = 150;
+const CIRCLE_RADIUS = 24;
+const CHORD = 48;
+const SHAPE_CX = 110;
+const SHAPE_CY = 75;
 const MAX_SPEED = 0.25;
 const STEPS_PER_FRAME = 5;
 
@@ -35,9 +35,10 @@ const pp = createPingPong(gl, NX, NY);
 let shapeKind: ShapeKind = "circle";
 let aoaDeg = 0;
 let solid = generateCircleMask(SHAPE_CX, SHAPE_CY, CIRCLE_RADIUS, NX, NY);
-let solidTex = createSolidTexture(solid);
+let solidTex = createSolidTexture(solid, gl.NEAREST);
+let solidTexDisplay = createSolidTexture(solid, gl.LINEAR);
 
-function createSolidTexture(solid: boolean[]): WebGLTexture {
+function createSolidTexture(solid: boolean[], filter: number): WebGLTexture {
   const t = gl.createTexture()!;
   gl.activeTexture(gl.TEXTURE3);
   gl.bindTexture(gl.TEXTURE_2D, t);
@@ -45,8 +46,8 @@ function createSolidTexture(solid: boolean[]): WebGLTexture {
   const d = new Uint8Array(NX * NY);
   for (let i = 0; i < NX * NY; i++) d[i] = solid[i] ? 255 : 0;
   gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, NX, NY, gl.RED, gl.UNSIGNED_BYTE, d);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   return t;
@@ -84,7 +85,9 @@ function regenerateSolid(): void {
   }
   gl.activeTexture(gl.TEXTURE3);
   gl.deleteTexture(solidTex);
-  solidTex = createSolidTexture(solid);
+  gl.deleteTexture(solidTexDisplay);
+  solidTex = createSolidTexture(solid, gl.NEAREST);
+  solidTexDisplay = createSolidTexture(solid, gl.LINEAR);
 }
 
 let uInlet = 0.1;
@@ -275,7 +278,7 @@ function frame(): void {
     }
   }
 
-  runDisplay(gl, pp.read, solidTex, NX, NY, canvas.width, canvas.height, MAX_SPEED);
+  runDisplay(gl, pp.read, solidTexDisplay, NX, NY, canvas.width, canvas.height, MAX_SPEED);
 
   if (frameCount++ > 60 && frameCount % 6 === 0) {
     const { drag, lift } = computeForces();
