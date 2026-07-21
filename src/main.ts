@@ -23,6 +23,8 @@ const MAX_SPEED = 0.25;
 const STEPS_PER_FRAME = 5;
 
 const canvas = document.getElementById("glcanvas") as HTMLCanvasElement;
+const vecCanvas = document.getElementById("vec-canvas") as HTMLCanvasElement;
+const vctx = vecCanvas.getContext("2d")!;
 const gl = createContext(canvas);
 
 const collideProg = createCollideProgram(gl);
@@ -115,19 +117,46 @@ document.body.appendChild(createReadoutPanel(MAX_SPEED));
   frameCount = 0;
 };
 
+document.addEventListener("keydown", (ev: KeyboardEvent) => {
+  if (ev.key === " " || ev.key === "p") {
+    ev.preventDefault();
+    const p = (ctrlPanel as any).__paused;
+    if (p) {
+      p.value = !p.value;
+      const btn = ctrlPanel.querySelector("button");
+      if (btn) btn.textContent = p.value ? "▶" : "⏸";
+    }
+  } else if (ev.key === "ArrowUp") {
+    ev.preventDefault();
+    config.aoaDeg = Math.min(20, config.aoaDeg + 1);
+    config.onUpdate();
+  } else if (ev.key === "ArrowDown") {
+    ev.preventDefault();
+    config.aoaDeg = Math.max(-20, config.aoaDeg - 1);
+    config.onUpdate();
+  } else if (ev.key === "r") {
+    (window as any).__resetSim?.();
+  } else if (ev.key === "[") {
+    config.uInlet = Math.max(0.01, config.uInlet - 0.01);
+    config.onUpdate();
+  } else if (ev.key === "]") {
+    config.uInlet = Math.min(0.25, config.uInlet + 0.01);
+    config.onUpdate();
+  }
+});
+
 const tmpFb = gl.createFramebuffer()!;
+let frameCount = 0;
+let paused = false;
 
 function computeForces(): { drag: number; lift: number } {
-  let fx = 0;
-  let fy = 0;
-
+  let fx = 0, fy = 0;
   const extent = shapeKind === "circle" ? CIRCLE_RADIUS + 2 : CHORD / 2 + 4;
   const minX = Math.max(0, SHAPE_CX - extent);
   const maxX = Math.min(NX - 1, SHAPE_CX + extent);
   const minY = Math.max(0, SHAPE_CY - extent);
   const maxY = Math.min(NY - 1, SHAPE_CY + extent);
-  const bw = maxX - minX + 1;
-  const bh = maxY - minY + 1;
+  const bw = maxX - minX + 1, bh = maxY - minY + 1;
   const bufSize = bw * bh * 4;
   const texData = [new Float32Array(bufSize), new Float32Array(bufSize), new Float32Array(bufSize)];
   for (let t = 0; t < 3; t++) {
@@ -136,10 +165,8 @@ function computeForces(): { drag: number; lift: number } {
     gl.readPixels(minX, minY, bw, bh, gl.RGBA, gl.FLOAT, texData[t]);
   }
   const allF = new Float32Array(Q);
-
   for (let y = minY; y <= maxY; y++) {
     const yOff = (y - minY) * bw * 4;
-
     for (let x = minX; x <= maxX; x++) {
       const idx = y * NX + x;
       if (solid[idx]) continue;
@@ -150,34 +177,21 @@ function computeForces(): { drag: number; lift: number } {
           if (i < Q) allF[i] = texData[t][base + ch];
         }
       }
-
       let isBoundary = false;
       for (let d = 0; d < 9; d++) {
-        const nx2 = x + E[d][0];
-        const ny2 = y + E[d][1];
+        const nx2 = x + E[d][0], ny2 = y + E[d][1];
         if (nx2 >= 0 && nx2 < NX && ny2 >= 0 && ny2 < NY && solid[ny2 * NX + nx2]) {
-          isBoundary = true;
-          break;
+          isBoundary = true; break;
         }
       }
       if (!isBoundary) continue;
-
-      let rho = 0;
-      let ux = 0;
-      let uy = 0;
-      for (let d = 0; d < 9; d++) {
-        rho += allF[d];
-        ux += allF[d] * E[d][0];
-        uy += allF[d] * E[d][1];
-      }
+      let rho = 0, ux = 0, uy = 0;
+      for (let d = 0; d < 9; d++) { rho += allF[d]; ux += allF[d] * E[d][0]; uy += allF[d] * E[d][1]; }
       if (rho <= 0) continue;
-      ux /= rho;
-      uy /= rho;
+      ux /= rho; uy /= rho;
       const usq = ux * ux + uy * uy;
-
       for (let d = 0; d < 9; d++) {
-        const nx2 = x + E[d][0];
-        const ny2 = y + E[d][1];
+        const nx2 = x + E[d][0], ny2 = y + E[d][1];
         if (!(nx2 >= 0 && nx2 < NX && ny2 >= 0 && ny2 < NY && solid[ny2 * NX + nx2])) continue;
         const eiux = E[d][0] * ux + E[d][1] * uy;
         const feq = W[d] * rho * (1 + eiux / CS2 + (eiux * eiux) / (2 * CS2 * CS2) - usq / (2 * CS2));
@@ -187,12 +201,60 @@ function computeForces(): { drag: number; lift: number } {
       }
     }
   }
-
   return { drag: fx, lift: fy };
 }
 
-let frameCount = 0;
-let paused = false;
+function resizeVecCanvas(): void {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  if (vecCanvas.width !== w || vecCanvas.height !== h) {
+    vecCanvas.width = w;
+    vecCanvas.height = h;
+  }
+}
+
+let lastDrag = 0;
+let lastLift = 0;
+const SCALE = 3;
+
+function drawVectors(drag: number, lift: number): void {
+  resizeVecCanvas();
+  vctx.clearRect(0, 0, vecCanvas.width, vecCanvas.height);
+
+  const ox = (SHAPE_CX / NX) * vecCanvas.width;
+  const oy = (SHAPE_CY / NY) * vecCanvas.height;
+
+  const maxF = Math.max(1, Math.abs(drag), Math.abs(lift));
+  const ld = (drag / maxF) * 60 * SCALE;
+  const ll = -(lift / maxF) * 60 * SCALE;
+
+  const arrow = (fromX: number, fromY: number, toX: number, toY: number, color: string): void => {
+    const headLen = 8;
+    const angle = Math.atan2(toY - fromY, toX - fromX);
+    vctx.strokeStyle = color;
+    vctx.lineWidth = 2;
+    vctx.beginPath();
+    vctx.moveTo(fromX, fromY);
+    vctx.lineTo(toX, toY);
+    vctx.stroke();
+    vctx.beginPath();
+    vctx.moveTo(toX, toY);
+    vctx.lineTo(toX - headLen * Math.cos(angle - 0.4), toY - headLen * Math.sin(angle - 0.4));
+    vctx.lineTo(toX - headLen * Math.cos(angle + 0.4), toY - headLen * Math.sin(angle + 0.4));
+    vctx.closePath();
+    vctx.fillStyle = color;
+    vctx.fill();
+  };
+
+  arrow(ox, oy, ox + ld, oy, "#7fc8f8");
+  arrow(ox, oy, ox, oy + ll, "#f8a07c");
+
+  vctx.fillStyle = "rgba(127,200,248,0.7)";
+  vctx.font = "11px -apple-system,BlinkMacSystemFont,sans-serif";
+  vctx.fillText(`D ${drag.toFixed(4)}`, ox + ld + 8, oy + 4);
+  vctx.fillStyle = "rgba(248,160,124,0.7)";
+  vctx.fillText(`L ${lift.toFixed(4)}`, ox + 8, oy + ll + 4);
+}
 
 function resize(): void {
   const w = canvas.clientWidth;
@@ -217,8 +279,11 @@ function frame(): void {
 
   if (frameCount++ > 60 && frameCount % 6 === 0) {
     const { drag, lift } = computeForces();
+    lastDrag = drag; lastLift = lift;
     updateReadout(drag, lift);
   }
+
+  drawVectors(lastDrag, lastLift);
 
   requestAnimationFrame(frame);
 }

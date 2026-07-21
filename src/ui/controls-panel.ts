@@ -9,117 +9,61 @@ export interface SimConfig {
   onUpdate: () => void;
 }
 
+const BTN = "background:var(--panel,#171a1f);color:var(--fg,#e6e8ec);border:1px solid var(--line,#272c34);border-radius:4px;padding:4px 10px;font:12px/1.4 monospace;cursor:pointer";
+const SLR = "width:100%;height:4px;-webkit-appearance:none;appearance:none;background:var(--line,#272c34);border-radius:2px;outline:none;margin:4px 0";
+const SLR_THUMB = "-webkit-appearance:none;appearance:none;width:12px;height:12px;border-radius:50%;background:var(--accent,#5eb0ef);cursor:pointer";
+
 export function createControlsPanel(config: SimConfig): HTMLDivElement {
-  const outer = document.createElement("div");
-  outer.style.cssText = `
-    position:fixed; top:12px; left:12px; z-index:10;
-    font:13px/1.5 monospace; user-select:none;
-  `;
-
-  const toggle = document.createElement("button");
-  toggle.textContent = "☰";
-  toggle.title = "Toggle controls";
-  toggle.style.cssText = `
-    width:32px;height:32px;border:none;border-radius:4px;
-    background:rgba(0,0,0,0.7);color:#ddd;font-size:18px;
-    cursor:pointer;margin-bottom:4px;
-  `;
-  outer.appendChild(toggle);
-
   const panel = document.createElement("div");
-  panel.id = "controls-panel";
+  panel.id = "ctrl";
   panel.style.cssText = `
-    background:rgba(0,0,0,0.7); color:#ddd;
-    padding:14px 18px; border-radius:8px;
-    min-width:200px;
+    position:fixed; top:0; left:0; right:0; z-index:10;
+    display:flex;align-items:center;gap:12px;
+    padding:6px 14px;
+    background:rgba(14,16,19,0.85);
+    backdrop-filter:blur(6px);
+    font:12px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    color:var(--fg,#e6e8ec);
+    user-select:none;
+    border-bottom:1px solid var(--line,#272c34);
   `;
 
-  const title = document.createElement("div");
+  const title = document.createElement("span");
   title.textContent = "windtoy";
-  title.style.cssText = "font-weight:bold;font-size:15px;margin-bottom:8px;color:#fff";
+  title.style.cssText = "font-weight:700;font-size:14px;color:var(--accent,#5eb0ef);margin-right:4px";
   panel.appendChild(title);
-
-  const btnRow = document.createElement("div");
-  btnRow.style.cssText = "display:flex;gap:6px;margin-bottom:8px";
-  panel.appendChild(btnRow);
 
   const paused = { value: false };
 
   const pauseBtn = document.createElement("button");
   pauseBtn.textContent = "⏸";
-  pauseBtn.title = "Pause / Resume";
-  pauseBtn.style.cssText = buttonStyle();
+  pauseBtn.title = "Pause / Resume (Space)";
+  pauseBtn.style.cssText = BTN;
   pauseBtn.addEventListener("click", () => {
     paused.value = !paused.value;
     pauseBtn.textContent = paused.value ? "▶" : "⏸";
   });
-  btnRow.appendChild(pauseBtn);
+  panel.appendChild(pauseBtn);
 
   const resetBtn = document.createElement("button");
   resetBtn.textContent = "↺";
-  resetBtn.title = "Reset simulation";
-  resetBtn.style.cssText = buttonStyle();
-  resetBtn.addEventListener("click", () => { (window as any).__resetSim && (window as any).__resetSim(); });
-  btnRow.appendChild(resetBtn);
+  resetBtn.title = "Reset (R)";
+  resetBtn.style.cssText = BTN;
+  resetBtn.addEventListener("click", () => (window as any).__resetSim?.());
+  panel.appendChild(resetBtn);
 
-  function buttonStyle(): string {
-    return "flex:1;background:#444;color:#ddd;border:1px solid #666;border-radius:4px;padding:4px 8px;font:14px monospace;cursor:pointer;text-align:center";
-  }
+  panel.appendChild(sep());
 
-  function addSlider(
-    label: string,
-    min: number,
-    max: number,
-    step: number,
-    initial: number,
-    fmt: (v: number) => string,
-    onChange: (v: number) => void,
-  ): HTMLInputElement {
-    const row = document.createElement("div");
-    row.style.cssText = "margin-bottom:6px";
+  const shapeLbl = document.createElement("span");
+  shapeLbl.textContent = "Shape";
+  shapeLbl.style.cssText = "color:var(--dim,#9aa3af);font-size:11px";
+  panel.appendChild(shapeLbl);
 
-    const lbl = document.createElement("div");
-    lbl.style.cssText = "display:flex;justify-content:space-between";
-    const name = document.createElement("span");
-    name.textContent = label;
-    const val = document.createElement("span");
-    val.textContent = fmt(initial);
-    lbl.appendChild(name);
-    lbl.appendChild(val);
-
-    const input = document.createElement("input");
-    input.type = "range";
-    input.min = String(min);
-    input.max = String(max);
-    input.step = String(step);
-    input.value = String(initial);
-    input.style.cssText = "width:100%;margin:2px 0";
-    input.addEventListener("input", () => {
-      const v = parseFloat(input.value);
-      val.textContent = fmt(v);
-      onChange(v);
-    });
-
-    row.appendChild(lbl);
-    row.appendChild(input);
-    panel.appendChild(row);
-    return input;
-  }
-
-  const charLen = config.shapeRadius * 2;
-
-  const selRow = document.createElement("div");
-  selRow.style.cssText = "margin-bottom:6px";
-  const selLbl = document.createElement("div");
-  selLbl.textContent = "Shape";
-  selLbl.style.cssText = "margin-bottom:2px";
   const sel = document.createElement("select");
-  sel.style.cssText = "width:100%;background:#333;color:#ddd;border:1px solid #555;border-radius:3px;padding:2px 4px;font:12px monospace";
-  const opts = ["circle", "flat-plate", "naca-airfoil"];
-  for (const o of opts) {
+  sel.style.cssText = `background:var(--panel,#171a1f);color:var(--fg,#e6e8ec);border:1px solid var(--line,#272c34);border-radius:3px;padding:2px 4px;font:11px monospace`;
+  for (const o of ["circle", "flat-plate", "naca-airfoil"]) {
     const opt = document.createElement("option");
-    opt.value = o;
-    opt.textContent = o;
+    opt.value = o; opt.textContent = o;
     if (o === config.shapeKind) opt.selected = true;
     sel.appendChild(opt);
   }
@@ -127,40 +71,90 @@ export function createControlsPanel(config: SimConfig): HTMLDivElement {
     config.shapeKind = sel.value as ShapeKind;
     config.onUpdate();
   });
-  selRow.appendChild(selLbl);
-  selRow.appendChild(sel);
-  panel.appendChild(selRow);
+  panel.appendChild(sel);
 
-  addSlider(
-    "AoA (deg)", -20, 20, 0.5, config.aoaDeg,
-    (v) => v.toFixed(1) + "°",
-    (v) => { config.aoaDeg = v; config.onUpdate(); },
-  );
+  panel.appendChild(sep());
 
-  addSlider(
-    "Inlet speed", 0.01, 0.25, 0.001, config.uInlet,
-    (v) => v.toFixed(3),
-    (v) => { config.uInlet = v; config.onUpdate(); },
-  );
-
-  addSlider(
-    "Reynolds #", 1, 200, 1,
-    Math.round(config.uInlet * charLen / ((1 / 3) * (config.tau - 0.5))),
-    (v) => String(Math.round(v)),
-    (v) => {
-      const nu = (1 / 3) * (config.tau - 0.5);
-      config.uInlet = Math.min(0.25, Math.max(0.01, v * nu / charLen));
-      config.onUpdate();
-    },
-  );
-
-  toggle.addEventListener("click", () => {
-    const hidden = panel.style.display === "none";
-    panel.style.display = hidden ? "" : "none";
-    toggle.textContent = hidden ? "☰" : "✕";
+  const aoaRow = slGroup("AoA", `${config.aoaDeg.toFixed(1)}°`);
+  const aoaVal = aoaRow.val;
+  const aoaInp = makeSlider(-20, 20, 0.5, config.aoaDeg, (v) => {
+    config.aoaDeg = v;
+    aoaVal.textContent = v.toFixed(1) + "°";
+    config.onUpdate();
   });
+  aoaRow.group.appendChild(aoaInp);
+  panel.appendChild(aoaRow.group);
 
-  outer.appendChild(panel);
-  (outer as any).__paused = paused;
-  return outer;
+  panel.appendChild(sep());
+
+  const speedRow = slGroup("Speed", config.uInlet.toFixed(3));
+  const speedVal = speedRow.val;
+  const speedInp = makeSlider(0.01, 0.25, 0.001, config.uInlet, (v) => {
+    config.uInlet = v;
+    speedVal.textContent = v.toFixed(3);
+    config.onUpdate();
+  });
+  speedRow.group.appendChild(speedInp);
+  panel.appendChild(speedRow.group);
+
+  panel.appendChild(sep());
+
+  const charLen = config.shapeRadius * 2;
+  const reInit = Math.round(config.uInlet * charLen / ((1 / 3) * (config.tau - 0.5)));
+  const reRow = slGroup("Re", String(reInit));
+  const reVal = reRow.val;
+  const reInp = makeSlider(1, 200, 1, reInit, (v) => {
+    const nu = (1 / 3) * (config.tau - 0.5);
+    config.uInlet = Math.min(0.25, Math.max(0.01, v * nu / charLen));
+    speedVal.textContent = config.uInlet.toFixed(3);
+    reVal.textContent = String(Math.round(v));
+    speedInp.value = String(config.uInlet);
+    config.onUpdate();
+  });
+  reRow.group.appendChild(reInp);
+  panel.appendChild(reRow.group);
+
+  (panel as any).__paused = paused;
+  return panel;
+
+  function sep(): HTMLSpanElement {
+    const s = document.createElement("span");
+    s.textContent = "│";
+    s.style.cssText = "color:var(--line,#272c34);font-size:14px";
+    return s;
+  }
+
+  function slGroup(label: string, initVal: string): { group: HTMLDivElement; val: HTMLSpanElement } {
+    const g = document.createElement("div");
+    g.style.cssText = "display:flex;align-items:center;gap:6px";
+    const lbl = document.createElement("span");
+    lbl.textContent = label;
+    lbl.style.cssText = "color:var(--dim,#9aa3af);font-size:11px;min-width:28px";
+    const v = document.createElement("span");
+    v.textContent = initVal;
+    v.style.cssText = "color:var(--fg,#e6e8ec);font-size:11px;min-width:36px;text-align:right";
+    g.appendChild(lbl);
+    g.appendChild(v);
+    return { group: g, val: v };
+  }
+
+  function makeSlider(min: number, max: number, step: number, init: number, onChange: (v: number) => void): HTMLInputElement {
+    const inp = document.createElement("input");
+    inp.type = "range";
+    inp.min = String(min);
+    inp.max = String(max);
+    inp.step = String(step);
+    inp.value = String(init);
+    inp.style.cssText = SLR;
+    const styleId = "__sliderStyle";
+    if (!document.getElementById(styleId)) {
+      const st = document.createElement("style");
+      st.id = styleId;
+      st.textContent = `#ctrl input[type=range]::-webkit-slider-thumb { ${SLR_THUMB} } #ctrl input[type=range]::-moz-range-thumb { ${SLR_THUMB} }`;
+      document.head.appendChild(st);
+    }
+    inp.addEventListener("input", () => onChange(parseFloat(inp.value)));
+    inp.style.width = "70px";
+    return inp;
+  }
 }
