@@ -29,7 +29,7 @@ export function createState(
 }
 
 export function setEquilibrium(
-  { f, nx }: LBMState,
+  { f, nx }: { f: Float64Array; nx: number },
   x: number,
   y: number,
   rho: number,
