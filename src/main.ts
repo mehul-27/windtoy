@@ -126,7 +126,7 @@ document.addEventListener("keydown", (ev: KeyboardEvent) => {
     const p = (ctrlPanel as any).__paused;
     if (p) {
       p.value = !p.value;
-      const btn = ctrlPanel.querySelector("button");
+      const btn = document.getElementById("btn-pause");
       if (btn) btn.textContent = p.value ? "▶" : "⏸";
     }
   } else if (ev.key === "ArrowUp") {
