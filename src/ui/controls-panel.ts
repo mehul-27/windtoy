@@ -10,7 +10,7 @@ export interface SimConfig {
 }
 
 const BTN = "background:var(--panel,#171a1f);color:var(--fg,#e6e8ec);border:1px solid var(--line,#272c34);border-radius:4px;padding:4px 10px;font:12px/1.4 monospace;cursor:pointer";
-const SLR = "width:100%;height:4px;-webkit-appearance:none;appearance:none;background:var(--line,#272c34);border-radius:2px;outline:none;margin:4px 0";
+const SLR_FILL = "width:100%;height:4px;-webkit-appearance:none;appearance:none;background:linear-gradient(to right,var(--accent,#5eb0ef) var(--val,0%),var(--line,#272c34) var(--val,0%));border-radius:2px;outline:none;margin:4px 0";
 const SLR_THUMB = "-webkit-appearance:none;appearance:none;width:12px;height:12px;border-radius:50%;background:var(--accent,#5eb0ef);cursor:pointer;border:none";
 
 export function createControlsPanel(config: SimConfig): HTMLDivElement {
@@ -100,7 +100,9 @@ export function createControlsPanel(config: SimConfig): HTMLDivElement {
     inp.max = String(max);
     inp.step = String(step);
     inp.value = String(init);
-    inp.style.cssText = SLR;
+    const pct = ((init - min) / (max - min)) * 100;
+    inp.style.cssText = SLR_FILL;
+    inp.style.setProperty("--val", pct.toFixed(1) + "%");
     const styleId = "__sliderStyle";
     if (!document.getElementById(styleId)) {
       const st = document.createElement("style");
@@ -110,7 +112,12 @@ export function createControlsPanel(config: SimConfig): HTMLDivElement {
         `#ctrl input[type=range]::-moz-range-thumb { ${SLR_THUMB} }`;
       document.head.appendChild(st);
     }
-    inp.addEventListener("input", () => onChange(parseFloat(inp.value)));
+    inp.addEventListener("input", () => {
+      const v = parseFloat(inp.value);
+      const p = ((v - min) / (max - min)) * 100;
+      inp.style.setProperty("--val", p.toFixed(1) + "%");
+      onChange(v);
+    });
     inp.style.width = "100%";
     return inp;
   }
@@ -118,6 +125,7 @@ export function createControlsPanel(config: SimConfig): HTMLDivElement {
   panel.appendChild(sep());
 
   const sel = document.createElement("select");
+  sel.title = "Select obstacle geometry";
   sel.style.cssText = "width:100%;background:var(--panel,#171a1f);color:var(--fg,#e6e8ec);border:1px solid var(--line,#272c34);border-radius:3px;padding:2px 4px;font:11px monospace";
   for (const o of ["circle", "flat-plate", "naca-airfoil"]) {
     const opt = document.createElement("option");
@@ -132,6 +140,7 @@ export function createControlsPanel(config: SimConfig): HTMLDivElement {
   });
 
   const shapeRow = document.createElement("div");
+  shapeRow.title = "Select obstacle geometry";
   shapeRow.style.cssText = "margin-bottom:4px";
   const shapeLbl = document.createElement("div");
   shapeLbl.textContent = "Shape";
@@ -141,6 +150,7 @@ export function createControlsPanel(config: SimConfig): HTMLDivElement {
   panel.appendChild(shapeRow);
 
   const aoaRow = document.createElement("div");
+  aoaRow.title = "Angle of attack — positive = nose up";
   aoaRow.style.cssText = "margin-bottom:4px";
   const aoaLbl = document.createElement("div");
   aoaLbl.textContent = "AoA";
@@ -160,6 +170,7 @@ export function createControlsPanel(config: SimConfig): HTMLDivElement {
   if (config.shapeKind === "circle") aoaRow.style.display = "none";
 
   const speedRow = document.createElement("div");
+  speedRow.title = "Inlet flow velocity";
   speedRow.style.cssText = "margin-bottom:4px";
   const speedLbl = document.createElement("div");
   speedLbl.textContent = "Speed";
@@ -180,6 +191,7 @@ export function createControlsPanel(config: SimConfig): HTMLDivElement {
   const charLen = config.shapeRadius * 2;
   const reInit = Math.round(config.uInlet * charLen / ((1 / 3) * (config.tau - 0.5)));
   const reRow = document.createElement("div");
+  reRow.title = "Reynolds number — adjusts inlet speed";
   reRow.style.cssText = "margin-bottom:2px";
   const reLbl = document.createElement("div");
   reLbl.textContent = "Re";
