@@ -30,3 +30,5 @@ export const W: readonly number[] = [
 export const CS2 = 1 / 3;
 
 export const OPPOSITE: readonly number[] = [0, 3, 4, 1, 2, 7, 8, 5, 6];
+
+export const REFLECT_Y: readonly number[] = [0, 1, 4, 3, 2, 8, 7, 6, 5];
