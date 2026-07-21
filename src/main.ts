@@ -127,26 +127,30 @@ function computeForces(): { drag: number; lift: number } {
   const minY = Math.max(0, SHAPE_CY - extent);
   const maxY = Math.min(NY - 1, SHAPE_CY + extent);
   const bw = maxX - minX + 1;
-  const row = new Float32Array(bw * 4);
+  const bh = maxY - minY + 1;
+  const bufSize = bw * bh * 4;
+  const texData = [new Float32Array(bufSize), new Float32Array(bufSize), new Float32Array(bufSize)];
+  for (let t = 0; t < 3; t++) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, tmpFb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, pp.read.tex[t], 0);
+    gl.readPixels(minX, minY, bw, bh, gl.RGBA, gl.FLOAT, texData[t]);
+  }
   const allF = new Float32Array(Q);
 
   for (let y = minY; y <= maxY; y++) {
-    for (let t = 0; t < 3; t++) {
-      gl.bindFramebuffer(gl.FRAMEBUFFER, tmpFb);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, pp.read.tex[t], 0);
-      gl.readPixels(minX, y, bw, 1, gl.RGBA, gl.FLOAT, row);
-      for (let x = minX; x <= maxX; x++) {
-        const off = (x - minX) * 4;
-        for (let ch = 0; ch < 4; ch++) {
-          const i = t * 4 + ch;
-          if (i < Q) allF[i] = row[off + ch];
-        }
-      }
-    }
+    const yOff = (y - minY) * bw * 4;
 
     for (let x = minX; x <= maxX; x++) {
       const idx = y * NX + x;
       if (solid[idx]) continue;
+      for (let t = 0; t < 3; t++) {
+        const base = yOff + (x - minX) * 4;
+        for (let ch = 0; ch < 4; ch++) {
+          const i = t * 4 + ch;
+          if (i < Q) allF[i] = texData[t][base + ch];
+        }
+      }
+
       let isBoundary = false;
       for (let d = 0; d < 9; d++) {
         const nx2 = x + E[d][0];
