@@ -2,6 +2,8 @@ import { Q, E, W, CS2, OPPOSITE, REFLECT_Y } from "./constants";
 
 export interface LBMState {
   f: Float64Array;
+  _fPost: Float64Array;
+  _fNew: Float64Array;
   nx: number;
   ny: number;
   tau: number;
@@ -18,8 +20,17 @@ export function createState(
   tau: number,
   uInlet: number,
 ): LBMState {
-  const f = new Float64Array(nx * ny * Q);
-  const state: LBMState = { f, nx, ny, tau, uInlet };
+  const cellCount = nx * ny * Q;
+  const f = new Float64Array(cellCount);
+  const state: LBMState = {
+    f,
+    _fPost: new Float64Array(cellCount),
+    _fNew: new Float64Array(cellCount),
+    nx,
+    ny,
+    tau,
+    uInlet,
+  };
   for (let y = 0; y < ny; y++) {
     for (let x = 0; x < nx; x++) {
       setEquilibrium(state, x, y, 1.0, uInlet, 0);
@@ -66,52 +77,81 @@ export function macroscopic(
   return { rho, ux, uy };
 }
 
+function fillEq(
+  f: Float64Array,
+  nx: number,
+  x: number,
+  y: number,
+  rho: number,
+  ux: number,
+  uy: number,
+): void {
+  const usq = ux * ux + uy * uy;
+  for (let i = 0; i < Q; i++) {
+    const eiux = E[i][0] * ux + E[i][1] * uy;
+    f[idx(nx, x, y, i)] =
+      W[i] *
+      rho *
+      (1 + eiux / CS2 + (eiux * eiux) / (2 * CS2 * CS2) - usq / (2 * CS2));
+  }
+}
+
 export function step(state: LBMState, solid?: boolean[]): void {
-  const { f, nx, ny, tau, uInlet } = state;
+  const { f, _fPost: fPost, _fNew: fNew, nx, ny, tau, uInlet } = state;
   const omega = 1 / tau;
-  const fPost = new Float64Array(nx * ny * Q);
+  const ncells = nx * ny * Q;
+
+  for (let i = 0; i < ncells; i++) fNew[i] = 0;
 
   for (let y = 0; y < ny; y++) {
     for (let x = 0; x < nx; x++) {
       if (solid && solid[y * nx + x]) continue;
-      const { rho, ux, uy } = macroscopic(state, x, y);
+      let rho = 0;
+      let ux = 0;
+      let uy = 0;
+      for (let d = 0; d < Q; d++) {
+        const fi = f[idx(nx, x, y, d)];
+        rho += fi;
+        ux += fi * E[d][0];
+        uy += fi * E[d][1];
+      }
+      ux /= rho;
+      uy /= rho;
       const usq = ux * ux + uy * uy;
-      for (let i = 0; i < Q; i++) {
-        const eiux = E[i][0] * ux + E[i][1] * uy;
+      for (let d = 0; d < Q; d++) {
+        const eiux = E[d][0] * ux + E[d][1] * uy;
         const feq =
-          W[i] *
-          rho *
+          W[d] * rho *
           (1 + eiux / CS2 + (eiux * eiux) / (2 * CS2 * CS2) - usq / (2 * CS2));
-        fPost[idx(nx, x, y, i)] = f[idx(nx, x, y, i)] + omega * (feq - f[idx(nx, x, y, i)]);
+        fPost[idx(nx, x, y, d)] = f[idx(nx, x, y, d)] + omega * (feq - f[idx(nx, x, y, d)]);
       }
     }
   }
 
-  const fNew = new Float64Array(nx * ny * Q);
-
   for (let y = 0; y < ny; y++) {
     for (let x = 0; x < nx; x++) {
       if (solid && solid[y * nx + x]) continue;
-      for (let i = 0; i < Q; i++) {
-        const nx2 = x + E[i][0];
-        const ny2 = y + E[i][1];
+      for (let d = 0; d < Q; d++) {
+        const nx2 = x + E[d][0];
+        const ny2 = y + E[d][1];
         if (solid && nx2 >= 0 && nx2 < nx && ny2 >= 0 && ny2 < ny && solid[ny2 * nx + nx2]) {
-          const opp = OPPOSITE[i];
-          fNew[idx(nx, x, y, opp)] += fPost[idx(nx, x, y, i)];
+          fNew[idx(nx, x, y, OPPOSITE[d])] += fPost[idx(nx, x, y, d)];
         } else if (nx2 >= 0 && nx2 < nx && ny2 >= 0 && ny2 < ny) {
-          fNew[idx(nx, nx2, ny2, i)] += fPost[idx(nx, x, y, i)];
+          fNew[idx(nx, nx2, ny2, d)] += fPost[idx(nx, x, y, d)];
         }
       }
     }
   }
 
   for (let y = 0; y < ny; y++) {
-    setEquilibrium({ f: fNew, nx }, 0, y, 1.0, uInlet, 0);
+    fillEq(fNew, nx, 0, y, 1.0, uInlet, 0);
   }
 
   for (let y = 0; y < ny; y++) {
-    for (let i = 0; i < Q; i++) {
-      fNew[idx(nx, nx - 1, y, i)] = fNew[idx(nx, nx - 2, y, i)];
+    const dstOff = y * nx + (nx - 1);
+    const srcOff = y * nx + (nx - 2);
+    for (let d = 0; d < Q; d++) {
+      fNew[dstOff * Q + d] = fNew[srcOff * Q + d];
     }
   }
 
@@ -126,5 +166,6 @@ export function step(state: LBMState, solid?: boolean[]): void {
     }
   }
 
-  state.f.set(fNew);
+  state._fNew = state.f;
+  state.f = fNew;
 }

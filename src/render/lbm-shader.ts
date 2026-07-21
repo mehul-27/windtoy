@@ -74,6 +74,7 @@ precision highp float;
 uniform sampler2D u_f0;
 uniform sampler2D u_f1;
 uniform sampler2D u_f2;
+uniform sampler2D u_solid;
 uniform float u_uInlet;
 uniform ivec2 u_gridSize;
 
@@ -91,15 +92,14 @@ const int opp[9] = int[9](0, 3, 4, 1, 2, 7, 8, 5, 6);
 const int reflY[9] = int[9](0, 1, 4, 3, 2, 8, 7, 6, 5);
 
 float readF(ivec2 pos, int i) {
-  ivec2 p = pos;
   if (i < 4) {
-    vec4 t = texelFetch(u_f0, p, 0);
+    vec4 t = texelFetch(u_f0, pos, 0);
     return i == 0 ? t.x : (i == 1 ? t.y : (i == 2 ? t.z : t.w));
   } else if (i < 8) {
-    vec4 t = texelFetch(u_f1, p, 0);
+    vec4 t = texelFetch(u_f1, pos, 0);
     return i == 4 ? t.x : (i == 5 ? t.y : (i == 6 ? t.z : t.w));
   } else {
-    return texelFetch(u_f2, p, 0).x;
+    return texelFetch(u_f2, pos, 0).x;
   }
 }
 
@@ -107,6 +107,10 @@ float equilibrium(int i, float rho, vec2 vel) {
   float eiux = dot(e[i], vel);
   float usq = dot(vel, vel);
   return w[i] * rho * (1.0 + eiux / CS2 + (eiux * eiux) / (2.0 * CS2 * CS2) - usq / (2.0 * CS2));
+}
+
+bool isSolid(ivec2 p) {
+  return texelFetch(u_solid, p, 0).r > 0.5;
 }
 
 void main() {
@@ -117,14 +121,14 @@ void main() {
   for (int i = 0; i < 9; i++) {
     ivec2 src = p - ivec2(e[i]);
 
-    if (p.x == 0) {
+    if (src.x >= 0 && src.x < g.x && src.y >= 0 && src.y < g.y && isSolid(src)) {
+      f[i] = readF(p, opp[i]);
+    } else if (p.x == 0) {
       f[i] = equilibrium(i, 1.0, vec2(u_uInlet, 0.0));
-    } else if (p.x >= g.x - 1 && src.x >= g.x) {
-      f[i] = readF(ivec2(g.x - 2, src.y), i);
     } else if (src.x < 0) {
       f[i] = equilibrium(i, 1.0, vec2(u_uInlet, 0.0));
     } else if (src.x >= g.x) {
-      f[i] = readF(ivec2(g.x - 1, src.y), i);
+      f[i] = readF(ivec2(g.x - 2, src.y), i);
     } else if (src.y < 0 || src.y >= g.y) {
       int yr = reflY[i];
       f[i] = readF(ivec2(src.x, src.y < 0 ? 0 : g.y - 1), yr);
@@ -179,6 +183,7 @@ export interface StreamProgram {
   u_f0: WebGLUniformLocation;
   u_f1: WebGLUniformLocation;
   u_f2: WebGLUniformLocation;
+  u_solid: WebGLUniformLocation;
   u_uInlet: WebGLUniformLocation;
   u_gridSize: WebGLUniformLocation;
 }
@@ -205,6 +210,7 @@ export function createStreamProgram(gl: WebGL2RenderingContext): StreamProgram {
     u_f0: gl.getUniformLocation(prog, "u_f0")!,
     u_f1: gl.getUniformLocation(prog, "u_f1")!,
     u_f2: gl.getUniformLocation(prog, "u_f2")!,
+    u_solid: gl.getUniformLocation(prog, "u_solid")!,
     u_uInlet: gl.getUniformLocation(prog, "u_uInlet")!,
     u_gridSize: gl.getUniformLocation(prog, "u_gridSize")!,
   };
@@ -267,6 +273,7 @@ export function runStream(
   uInlet: number,
   nx: number,
   ny: number,
+  solidTex?: WebGLTexture,
 ): void {
   gl.bindFramebuffer(gl.FRAMEBUFFER, ppWrite.fbo);
   gl.viewport(0, 0, nx, ny);
@@ -281,6 +288,9 @@ export function runStream(
   gl.activeTexture(gl.TEXTURE2);
   gl.bindTexture(gl.TEXTURE_2D, ppRead.tex[2]);
   gl.uniform1i(prog.u_f2, 2);
+  gl.activeTexture(gl.TEXTURE3);
+  gl.bindTexture(gl.TEXTURE_2D, solidTex || null);
+  gl.uniform1i(prog.u_solid, 3);
   gl.uniform1f(prog.u_uInlet, uInlet);
   gl.uniform2i(prog.u_gridSize, nx, ny);
 
