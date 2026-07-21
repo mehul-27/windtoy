@@ -221,7 +221,7 @@ const FULLSCREEN_QUAD = new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]);
 let quadVAO: WebGLVertexArrayObject | null = null;
 let quadBuf: WebGLBuffer | null = null;
 
-function ensureQuad(gl: WebGL2RenderingContext): WebGLVertexArrayObject {
+export function ensureQuad(gl: WebGL2RenderingContext): WebGLVertexArrayObject {
   if (!quadVAO) {
     quadVAO = gl.createVertexArray();
     gl.bindVertexArray(quadVAO);
