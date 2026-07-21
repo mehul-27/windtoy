@@ -22,16 +22,19 @@ const vec2 e[9] = vec2[9](
 );
 
 vec3 colormap(float t) {
-  t = clamp(t, 0.0, 1.0);
-  if (t < 0.25) {
-    return mix(vec3(0.0, 0.0, 0.5), vec3(0.0, 0.0, 1.0), t / 0.25);
-  } else if (t < 0.5) {
-    return mix(vec3(0.0, 0.0, 1.0), vec3(0.0, 1.0, 1.0), (t - 0.25) / 0.25);
-  } else if (t < 0.75) {
-    return mix(vec3(0.0, 1.0, 1.0), vec3(1.0, 1.0, 0.0), (t - 0.5) / 0.25);
-  } else {
-    return mix(vec3(1.0, 1.0, 0.0), vec3(1.0, 0.0, 0.0), (t - 0.75) / 0.25);
-  }
+  const vec3 c[7] = vec3[7](
+    vec3(0.127, 0.050, 0.162),
+    vec3(0.220, 0.404, 0.792),
+    vec3(0.262, 0.714, 0.761),
+    vec3(0.358, 0.904, 0.494),
+    vec3(0.710, 0.957, 0.207),
+    vec3(0.970, 0.657, 0.122),
+    vec3(0.838, 0.118, 0.069)
+  );
+  t = clamp(t, 0.0, 1.0) * 6.0;
+  int i = int(floor(t));
+  float f = t - float(i);
+  return mix(c[i], c[min(i + 1, 6)], f);
 }
 
 bool isSolid(vec2 uv) {

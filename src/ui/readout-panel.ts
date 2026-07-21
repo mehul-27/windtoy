@@ -12,13 +12,20 @@ export function createReadoutPanel(maxSpeed: number): HTMLDivElement {
     border:1px solid var(--line,#272c34);
     min-width:100px;
   `;
+  const turboColors = [
+    "#20143b", "#384fcc", "#2a8fd6", "#37c784",
+    "#a7d62d", "#fdc93b", "#eb6637",
+  ];
+
   panel.innerHTML = `
     <div><span style="color:#7fc8f8">Drag</span> <span id="drag-val" style="color:#e6e8ec">—</span></div>
     <div style="margin-top:2px"><span style="color:#f8a07c">Lift</span> <span id="lift-val" style="color:#e6e8ec">—</span></div>
     <div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--line,#272c34)">
-      <canvas id="legend-canvas" width="100" height="10"></canvas>
-      <div style="display:flex;justify-content:space-between;font:10px monospace;color:var(--dim,#9aa3af)">
+      <div style="font:10px/1.4 -apple-system,BlinkMacSystemFont,sans-serif;color:var(--dim,#9aa3af);text-align:left;margin-bottom:2px">Velocity magnitude</div>
+      <canvas id="legend-canvas" width="100" height="12"></canvas>
+      <div style="display:flex;justify-content:space-between;font:9px monospace;color:var(--dim,#9aa3af)">
         <span>0</span>
+        <span>${(maxSpeed/2).toFixed(2)}</span>
         <span id="legend-max">${maxSpeed.toFixed(2)}</span>
       </div>
     </div>
@@ -27,15 +34,19 @@ export function createReadoutPanel(maxSpeed: number): HTMLDivElement {
   const cvs = panel.querySelector("#legend-canvas") as HTMLCanvasElement;
   const ctx = cvs.getContext("2d")!;
   const grad = ctx.createLinearGradient(0, 0, 100, 0);
-  grad.addColorStop(0.00, "#000080");
-  grad.addColorStop(0.17, "#0000ff");
-  grad.addColorStop(0.33, "#00ffff");
-  grad.addColorStop(0.50, "#00ff00");
-  grad.addColorStop(0.67, "#ffff00");
-  grad.addColorStop(0.83, "#ff8000");
-  grad.addColorStop(1.00, "#ff0000");
+  for (let i = 0; i < 7; i++) {
+    grad.addColorStop(i / 6, turboColors[i]);
+  }
   ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, 100, 10);
+  ctx.fillRect(0, 2, 100, 8);
+  ctx.strokeStyle = "#272c34";
+  ctx.lineWidth = 1;
+  for (const x of [0, 50, 100]) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, 4);
+    ctx.stroke();
+  }
 
   return panel;
 }
