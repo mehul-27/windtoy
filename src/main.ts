@@ -8,7 +8,7 @@ import {
 } from "./render/lbm-shader";
 import { createDisplayProgram, runDisplay } from "./render/colormap-shader";
 import { generateCircleMask } from "./shapes/rasterize";
-import { generateFlatPlate, generateNACA0012 } from "./shapes/airfoil";
+import { generateFlatPlate, generateNACA0012, getNACAOutlinePoints, getFlatPlateOutlinePoints } from "./shapes/airfoil";
 import { createControlsPanel, SimConfig, ShapeKind } from "./ui/controls-panel";
 import { createReadoutPanel, updateReadout } from "./ui/readout-panel";
 import { Q, E, W, CS2 } from "./solver/constants";
@@ -220,12 +220,47 @@ let lastDrag = 0;
 let lastLift = 0;
 const SCALE = 3;
 
+function gx(x: number): number { return (x / NX) * vecCanvas.width; }
+function gy(y: number): number { return (y / NY) * vecCanvas.height; }
+
+function drawShapeOutline(): void {
+  vctx.save();
+  if (shapeKind === "circle") {
+    const cx = gx(SHAPE_CX), cy = gy(SHAPE_CY);
+    const r = (CIRCLE_RADIUS / NX) * vecCanvas.width;
+    vctx.beginPath();
+    vctx.arc(cx, cy, r, 0, Math.PI * 2);
+  } else if (shapeKind === "flat-plate") {
+    const pts = getFlatPlateOutlinePoints(SHAPE_CX, SHAPE_CY, CHORD, aoaDeg);
+    vctx.beginPath();
+    const s = pts.map(([px, py]) => [gx(px), gy(py)] as [number, number]);
+    vctx.moveTo(s[0][0], s[0][1]);
+    for (let i = 1; i < s.length; i++) vctx.lineTo(s[i][0], s[i][1]);
+    vctx.closePath();
+  } else {
+    const pts = getNACAOutlinePoints(SHAPE_CX, SHAPE_CY, CHORD, aoaDeg, 60);
+    const s = pts.map(([px, py]) => [gx(px), gy(py)] as [number, number]);
+    vctx.beginPath();
+    vctx.moveTo(s[0][0], s[0][1]);
+    for (let i = 1; i < s.length; i++) vctx.lineTo(s[i][0], s[i][1]);
+    vctx.closePath();
+  }
+  vctx.fillStyle = "rgba(64,64,66,0.85)";
+  vctx.strokeStyle = "rgba(255,255,255,0.6)";
+  vctx.lineWidth = 1.5;
+  vctx.fill();
+  vctx.stroke();
+  vctx.restore();
+}
+
 function drawVectors(drag: number, lift: number): void {
   resizeVecCanvas();
   vctx.clearRect(0, 0, vecCanvas.width, vecCanvas.height);
 
-  const ox = (SHAPE_CX / NX) * vecCanvas.width;
-  const oy = (SHAPE_CY / NY) * vecCanvas.height;
+  drawShapeOutline();
+
+  const ox = gx(SHAPE_CX);
+  const oy = gy(SHAPE_CY);
 
   const maxF = Math.max(1, Math.abs(drag), Math.abs(lift));
   const ld = (drag / maxF) * 60 * SCALE;

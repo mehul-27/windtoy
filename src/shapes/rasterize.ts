@@ -1,3 +1,5 @@
+export const HALF_DIAG = Math.SQRT2 / 2;
+
 export function generateCircleMask(
   cx: number,
   cy: number,
@@ -6,7 +8,7 @@ export function generateCircleMask(
   ny: number,
 ): boolean[] {
   const mask = new Array<boolean>(nx * ny).fill(false);
-  const r2 = radius * radius;
+  const r2 = (radius + HALF_DIAG) * (radius + HALF_DIAG);
   for (let y = 0; y < ny; y++) {
     for (let x = 0; x < nx; x++) {
       const dx = x - cx;
