@@ -9,6 +9,7 @@ import {
 import { createDisplayProgram, runDisplay } from "./render/colormap-shader";
 import { generateCircleMask } from "./shapes/rasterize";
 import { createControlsPanel, SimConfig } from "./ui/controls-panel";
+import { createReadoutPanel, updateReadout } from "./ui/readout-panel";
 import { Q, E, W, CS2 } from "./solver/constants";
 
 const NX = 200;
@@ -83,6 +84,80 @@ const config: SimConfig = {
 
 initTextures(uInlet);
 document.body.appendChild(createControlsPanel(config));
+document.body.appendChild(createReadoutPanel());
+
+const tmpFb = gl.createFramebuffer()!;
+const pixelBuf = new Float32Array(4);
+
+function getF(x: number, y: number): Float64Array {
+  const f = new Float64Array(Q);
+  for (let t = 0; t < 3; t++) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, tmpFb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, pp.read.tex[t], 0);
+    gl.readPixels(x, y, 1, 1, gl.RGBA, gl.FLOAT, pixelBuf);
+    for (let ch = 0; ch < 4; ch++) {
+      const i = t * 4 + ch;
+      if (i < Q) f[i] = pixelBuf[ch];
+    }
+  }
+  return f;
+}
+
+function computeForces(): { drag: number; lift: number } {
+  let fx = 0;
+  let fy = 0;
+
+  const minX = Math.max(0, 50 - CIRCLE_RADIUS - 2);
+  const maxX = Math.min(NX - 1, 50 + CIRCLE_RADIUS + 2);
+  const minY = Math.max(0, 40 - CIRCLE_RADIUS - 2);
+  const maxY = Math.min(NY - 1, 40 + CIRCLE_RADIUS + 2);
+
+  for (let y = minY; y <= maxY; y++) {
+    for (let x = minX; x <= maxX; x++) {
+      const idx = y * NX + x;
+      if (solid[idx]) continue;
+      let isBoundary = false;
+      for (let d = 0; d < 9; d++) {
+        const nx2 = x + E[d][0];
+        const ny2 = y + E[d][1];
+        if (nx2 >= 0 && nx2 < NX && ny2 >= 0 && ny2 < NY && solid[ny2 * NX + nx2]) {
+          isBoundary = true;
+          break;
+        }
+      }
+      if (!isBoundary) continue;
+
+      const f = getF(x, y);
+      let rho = 0;
+      let ux = 0;
+      let uy = 0;
+      for (let d = 0; d < 9; d++) {
+        rho += f[d];
+        ux += f[d] * E[d][0];
+        uy += f[d] * E[d][1];
+      }
+      if (rho <= 0) continue;
+      ux /= rho;
+      uy /= rho;
+      const usq = ux * ux + uy * uy;
+
+      for (let d = 0; d < 9; d++) {
+        const nx2 = x + E[d][0];
+        const ny2 = y + E[d][1];
+        if (!(nx2 >= 0 && nx2 < NX && ny2 >= 0 && ny2 < NY && solid[ny2 * NX + nx2])) continue;
+        const eiux = E[d][0] * ux + E[d][1] * uy;
+        const feq = W[d] * rho * (1 + eiux / CS2 + (eiux * eiux) / (2 * CS2 * CS2) - usq / (2 * CS2));
+        const fPost = f[d] + omega * (feq - f[d]);
+        fx += 2 * fPost * E[d][0];
+        fy += 2 * fPost * E[d][1];
+      }
+    }
+  }
+
+  return { drag: fx, lift: fy };
+}
+
+let frameCount = 0;
 
 function resize(): void {
   const w = canvas.clientWidth;
@@ -99,7 +174,14 @@ function frame(): void {
     runCollide(gl, collideProg, pp.read, pp.write, omega, NX, NY);
     runStream(gl, streamProg, pp.write, pp.read, uInlet, NX, NY, solidTex);
   }
+
   runDisplay(gl, pp.read, solidTex, NX, NY, canvas.width, canvas.height, MAX_SPEED);
+
+  if (frameCount++ % 6 === 0) {
+    const { drag, lift } = computeForces();
+    updateReadout(drag, lift);
+  }
+
   requestAnimationFrame(frame);
 }
 
