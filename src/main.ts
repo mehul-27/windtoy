@@ -106,9 +106,14 @@ const config: SimConfig = {
   },
 };
 
-initTextures(uInlet);
-document.body.appendChild(createControlsPanel(config));
-document.body.appendChild(createReadoutPanel());
+const ctrlPanel = createControlsPanel(config);
+document.body.appendChild(ctrlPanel);
+document.body.appendChild(createReadoutPanel(MAX_SPEED));
+
+(window as any).__resetSim = () => {
+  initTextures(uInlet);
+  frameCount = 0;
+};
 
 const tmpFb = gl.createFramebuffer()!;
 const pixelBuf = new Float32Array(4);
@@ -183,6 +188,7 @@ function computeForces(): { drag: number; lift: number } {
 }
 
 let frameCount = 0;
+let paused = false;
 
 function resize(): void {
   const w = canvas.clientWidth;
@@ -194,10 +200,13 @@ function resize(): void {
 }
 
 function frame(): void {
+  paused = (ctrlPanel as any).__paused.value;
   resize();
-  for (let s = 0; s < STEPS_PER_FRAME; s++) {
-    runCollide(gl, collideProg, pp.read, pp.write, omega, NX, NY);
-    runStream(gl, streamProg, pp.write, pp.read, uInlet, NX, NY, solidTex);
+  if (!paused) {
+    for (let s = 0; s < STEPS_PER_FRAME; s++) {
+      runCollide(gl, collideProg, pp.read, pp.write, omega, NX, NY);
+      runStream(gl, streamProg, pp.write, pp.read, uInlet, NX, NY, solidTex);
+    }
   }
 
   runDisplay(gl, pp.read, solidTex, NX, NY, canvas.width, canvas.height, MAX_SPEED);

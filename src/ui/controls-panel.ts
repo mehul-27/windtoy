@@ -10,20 +10,61 @@ export interface SimConfig {
 }
 
 export function createControlsPanel(config: SimConfig): HTMLDivElement {
+  const outer = document.createElement("div");
+  outer.style.cssText = `
+    position:fixed; top:12px; left:12px; z-index:10;
+    font:13px/1.5 monospace; user-select:none;
+  `;
+
+  const toggle = document.createElement("button");
+  toggle.textContent = "☰";
+  toggle.title = "Toggle controls";
+  toggle.style.cssText = `
+    width:32px;height:32px;border:none;border-radius:4px;
+    background:rgba(0,0,0,0.7);color:#ddd;font-size:18px;
+    cursor:pointer;margin-bottom:4px;
+  `;
+  outer.appendChild(toggle);
+
   const panel = document.createElement("div");
   panel.id = "controls-panel";
   panel.style.cssText = `
-    position:fixed; top:12px; left:12px; z-index:10;
     background:rgba(0,0,0,0.7); color:#ddd;
     padding:14px 18px; border-radius:8px;
-    font:13px/1.5 monospace; min-width:200px;
-    user-select:none;
+    min-width:200px;
   `;
 
   const title = document.createElement("div");
   title.textContent = "windtoy";
   title.style.cssText = "font-weight:bold;font-size:15px;margin-bottom:8px;color:#fff";
   panel.appendChild(title);
+
+  const btnRow = document.createElement("div");
+  btnRow.style.cssText = "display:flex;gap:6px;margin-bottom:8px";
+  panel.appendChild(btnRow);
+
+  const paused = { value: false };
+
+  const pauseBtn = document.createElement("button");
+  pauseBtn.textContent = "⏸";
+  pauseBtn.title = "Pause / Resume";
+  pauseBtn.style.cssText = buttonStyle();
+  pauseBtn.addEventListener("click", () => {
+    paused.value = !paused.value;
+    pauseBtn.textContent = paused.value ? "▶" : "⏸";
+  });
+  btnRow.appendChild(pauseBtn);
+
+  const resetBtn = document.createElement("button");
+  resetBtn.textContent = "↺";
+  resetBtn.title = "Reset simulation";
+  resetBtn.style.cssText = buttonStyle();
+  resetBtn.addEventListener("click", () => { (window as any).__resetSim && (window as any).__resetSim(); });
+  btnRow.appendChild(resetBtn);
+
+  function buttonStyle(): string {
+    return "flex:1;background:#444;color:#ddd;border:1px solid #666;border-radius:4px;padding:4px 8px;font:14px monospace;cursor:pointer;text-align:center";
+  }
 
   function addSlider(
     label: string,
@@ -113,5 +154,13 @@ export function createControlsPanel(config: SimConfig): HTMLDivElement {
     },
   );
 
-  return panel;
+  toggle.addEventListener("click", () => {
+    const hidden = panel.style.display === "none";
+    panel.style.display = hidden ? "" : "none";
+    toggle.textContent = hidden ? "☰" : "✕";
+  });
+
+  outer.appendChild(panel);
+  (outer as any).__paused = paused;
+  return outer;
 }

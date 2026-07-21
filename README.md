@@ -1,31 +1,35 @@
 # windtoy
 
-A 2D browser-based wind tunnel / flow visualizer using the Lattice Boltzmann
-Method (D2Q9, BGK). Built with TypeScript + WebGL2.
+Browser-based 2D lattice Boltzmann fluid flow visualizer using TypeScript + WebGL2.
 
-> **Qualitative, physically-motivated flow visualizer — not validated CFD.**
-> The simulation captures the correct *shape* of the flow (stagnation point,
-> wake, vortex shedding, separation) but does not produce correct real-world
-> numbers.
+## Features
 
-Inspired by [kutta](https://github.com/crgimenes/kutta).
+- D2Q9 BGK solver (CPU reference + GPU WebGL2 implementation with ping-pong FBOs)
+- Obstacles: circle, flat plate, NACA0012 airfoil (angle-of-attack control)
+- Bounce-back boundary condition on obstacle surfaces
+- Free-slip top/bottom walls, fixed-velocity inlet, zero-gradient outlet
+- Live lift/drag readout via momentum-exchange method
+- Jet colormap velocity visualization
 
-## Run locally
+## Controls
 
-```bash
-npm install
-npm run dev
-```
+| Control | Description |
+|---------|-------------|
+| ☰ toggle | Collapse / expand controls |
+| ⏸ / ▶ | Pause / resume |
+| ↺ | Reset simulation |
+| Shape | Select circle, flat plate, or NACA airfoil |
+| AoA | Angle of attack (−20° to 20°) |
+| Inlet speed | Upstream velocity (0.01–0.25) |
+| Reynolds # | Linked to speed + obstacle characteristic length |
 
 ## Build
 
 ```bash
-npm run build
-npm run preview
+npm install
+npm run dev    # dev server
+npm run build  # production build
+npm test       # CPU solver validation
 ```
 
-## Test
-
-```bash
-npm test
-```
+Grid: 200×80, default τ = 0.55, u_inlet = 0.1.
