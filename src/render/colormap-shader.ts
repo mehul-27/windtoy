@@ -75,19 +75,23 @@ let u_solid: WebGLUniformLocation | null = null;
 let u_texScale: WebGLUniformLocation | null = null;
 let u_maxSpeed: WebGLUniformLocation | null = null;
 
-export function createDisplayProgram(gl: WebGL2RenderingContext): void {
-  const vs = gl.createShader(gl.VERTEX_SHADER)!;
-  gl.shaderSource(vs, DISPLAY_VS);
-  gl.compileShader(vs);
+function compile(gl: WebGL2RenderingContext, type: number, src: string): WebGLShader {
+  const s = gl.createShader(type)!;
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s) || "compile error");
+  return s;
+}
 
-  const fs = gl.createShader(gl.FRAGMENT_SHADER)!;
-  gl.shaderSource(fs, DISPLAY_FS);
-  gl.compileShader(fs);
+export function createDisplayProgram(gl: WebGL2RenderingContext): void {
+  const vs = compile(gl, gl.VERTEX_SHADER, DISPLAY_VS);
+  const fs = compile(gl, gl.FRAGMENT_SHADER, DISPLAY_FS);
 
   displayProg = gl.createProgram()!;
   gl.attachShader(displayProg, vs);
   gl.attachShader(displayProg, fs);
   gl.linkProgram(displayProg);
+  if (!gl.getProgramParameter(displayProg, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(displayProg) || "link error");
 
   u_f0 = gl.getUniformLocation(displayProg, "u_f0");
   u_f1 = gl.getUniformLocation(displayProg, "u_f1");

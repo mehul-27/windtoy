@@ -116,21 +116,6 @@ document.body.appendChild(createReadoutPanel(MAX_SPEED));
 };
 
 const tmpFb = gl.createFramebuffer()!;
-const pixelBuf = new Float32Array(4);
-
-function getF(x: number, y: number): Float64Array {
-  const f = new Float64Array(Q);
-  for (let t = 0; t < 3; t++) {
-    gl.bindFramebuffer(gl.FRAMEBUFFER, tmpFb);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, pp.read.tex[t], 0);
-    gl.readPixels(x, y, 1, 1, gl.RGBA, gl.FLOAT, pixelBuf);
-    for (let ch = 0; ch < 4; ch++) {
-      const i = t * 4 + ch;
-      if (i < Q) f[i] = pixelBuf[ch];
-    }
-  }
-  return f;
-}
 
 function computeForces(): { drag: number; lift: number } {
   let fx = 0;
@@ -141,8 +126,24 @@ function computeForces(): { drag: number; lift: number } {
   const maxX = Math.min(NX - 1, SHAPE_CX + extent);
   const minY = Math.max(0, SHAPE_CY - extent);
   const maxY = Math.min(NY - 1, SHAPE_CY + extent);
+  const bw = maxX - minX + 1;
+  const row = new Float32Array(bw * 4);
+  const allF = new Float32Array(Q);
 
   for (let y = minY; y <= maxY; y++) {
+    for (let t = 0; t < 3; t++) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, tmpFb);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, pp.read.tex[t], 0);
+      gl.readPixels(minX, y, bw, 1, gl.RGBA, gl.FLOAT, row);
+      for (let x = minX; x <= maxX; x++) {
+        const off = (x - minX) * 4;
+        for (let ch = 0; ch < 4; ch++) {
+          const i = t * 4 + ch;
+          if (i < Q) allF[i] = row[off + ch];
+        }
+      }
+    }
+
     for (let x = minX; x <= maxX; x++) {
       const idx = y * NX + x;
       if (solid[idx]) continue;
@@ -157,14 +158,13 @@ function computeForces(): { drag: number; lift: number } {
       }
       if (!isBoundary) continue;
 
-      const f = getF(x, y);
       let rho = 0;
       let ux = 0;
       let uy = 0;
       for (let d = 0; d < 9; d++) {
-        rho += f[d];
-        ux += f[d] * E[d][0];
-        uy += f[d] * E[d][1];
+        rho += allF[d];
+        ux += allF[d] * E[d][0];
+        uy += allF[d] * E[d][1];
       }
       if (rho <= 0) continue;
       ux /= rho;
@@ -177,7 +177,7 @@ function computeForces(): { drag: number; lift: number } {
         if (!(nx2 >= 0 && nx2 < NX && ny2 >= 0 && ny2 < NY && solid[ny2 * NX + nx2])) continue;
         const eiux = E[d][0] * ux + E[d][1] * uy;
         const feq = W[d] * rho * (1 + eiux / CS2 + (eiux * eiux) / (2 * CS2 * CS2) - usq / (2 * CS2));
-        const fPost = f[d] + omega * (feq - f[d]);
+        const fPost = allF[d] + omega * (feq - allF[d]);
         fx += 2 * fPost * E[d][0];
         fy += 2 * fPost * E[d][1];
       }
@@ -211,7 +211,7 @@ function frame(): void {
 
   runDisplay(gl, pp.read, solidTex, NX, NY, canvas.width, canvas.height, MAX_SPEED);
 
-  if (frameCount++ % 6 === 0) {
+  if (frameCount++ > 60 && frameCount % 6 === 0) {
     const { drag, lift } = computeForces();
     updateReadout(drag, lift);
   }
