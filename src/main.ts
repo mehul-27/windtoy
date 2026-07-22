@@ -7,18 +7,19 @@ import {
   runStream,
 } from "./render/lbm-shader";
 import { createDisplayProgram, runDisplay } from "./render/colormap-shader";
+import { createBlurProgram, runBlurPass, runComposite } from "./render/blur";
 import { generateCircleMask } from "./shapes/rasterize";
 import { generateFlatPlate, generateNACA0012, getNACAOutlinePoints, getFlatPlateOutlinePoints } from "./shapes/airfoil";
 import { createControlsPanel, SimConfig, ShapeKind } from "./ui/controls-panel";
 import { createReadoutPanel, updateReadout } from "./ui/readout-panel";
 import { Q, E, W, CS2 } from "./solver/constants";
+import { createVelocityExportProgram, createVelExportBuffers, runVelocityExport, readVelocityBack } from "./particles/velocity-export";
+import { ParticleSystem } from "./particles/particle-system";
 
 const NX = 400;
 const NY = 150;
 const CIRCLE_RADIUS = 24;
 const CHORD = 48;
-const SHAPE_CX = 110;
-const SHAPE_CY = 75;
 const MAX_SPEED = 0.25;
 const STEPS_PER_FRAME = 5;
 
@@ -30,13 +31,17 @@ const gl = createContext(canvas);
 const collideProg = createCollideProgram(gl);
 const streamProg = createStreamProgram(gl);
 createDisplayProgram(gl);
+createBlurProgram(gl);
+createVelocityExportProgram(gl);
+const velBuf = createVelExportBuffers(gl, NX, NY);
 const pp = createPingPong(gl, NX, NY);
+const particles = new ParticleSystem();
 
 let shapeKind: ShapeKind = "circle";
 let aoaDeg = 0;
-let solid = generateCircleMask(SHAPE_CX, SHAPE_CY, CIRCLE_RADIUS, NX, NY);
+let shapeCx = 110, shapeCy = 75;
+let solid = generateCircleMask(shapeCx, shapeCy, CIRCLE_RADIUS, NX, NY);
 let solidTex = createSolidTexture(solid, gl.NEAREST);
-let solidTexDisplay = createSolidTexture(solid, gl.LINEAR);
 
 function createSolidTexture(solid: boolean[], filter: number): WebGLTexture {
   const t = gl.createTexture()!;
@@ -51,6 +56,53 @@ function createSolidTexture(solid: boolean[], filter: number): WebGLTexture {
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   return t;
+}
+
+let colorTex: WebGLTexture | null = null;
+let colorFbo: WebGLFramebuffer | null = null;
+let blurTex: WebGLTexture | null = null;
+let blurFbo: WebGLFramebuffer | null = null;
+let wideTex: WebGLTexture | null = null;
+let wideFbo: WebGLFramebuffer | null = null;
+
+function makeRenderTexture(gl: WebGL2RenderingContext, w: number, h: number): WebGLTexture {
+  const t = gl.createTexture()!;
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, w, h);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  return t;
+}
+
+function makeRenderFbo(gl: WebGL2RenderingContext, tex: WebGLTexture): WebGLFramebuffer {
+  const fbo = gl.createFramebuffer()!;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  return fbo;
+}
+
+let blurBufW = 0, blurBufH = 0;
+
+function ensureBlurBuffers(w: number, h: number): void {
+  if (colorTex && colorFbo && blurTex && blurFbo && wideTex && wideFbo && blurBufW === w && blurBufH === h) return;
+  if (colorTex) gl.deleteTexture(colorTex);
+  if (colorFbo) gl.deleteFramebuffer(colorFbo);
+  if (blurTex) gl.deleteTexture(blurTex);
+  if (blurFbo) gl.deleteFramebuffer(blurFbo);
+  if (wideTex) gl.deleteTexture(wideTex);
+  if (wideFbo) gl.deleteFramebuffer(wideFbo);
+
+  blurBufW = w; blurBufH = h;
+  colorTex = makeRenderTexture(gl, w, h);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  colorFbo = makeRenderFbo(gl, colorTex);
+  blurTex = makeRenderTexture(gl, w, h);
+  blurFbo = makeRenderFbo(gl, blurTex);
+  wideTex = makeRenderTexture(gl, w, h);
+  wideFbo = makeRenderFbo(gl, wideTex);
 }
 
 function initTextures(uInlet: number): void {
@@ -77,17 +129,15 @@ function initTextures(uInlet: number): void {
 
 function regenerateSolid(): void {
   if (shapeKind === "circle") {
-    solid = generateCircleMask(SHAPE_CX, SHAPE_CY, CIRCLE_RADIUS, NX, NY);
+    solid = generateCircleMask(shapeCx, shapeCy, CIRCLE_RADIUS, NX, NY);
   } else if (shapeKind === "flat-plate") {
-    solid = generateFlatPlate(SHAPE_CX, SHAPE_CY, CHORD, aoaDeg, NX, NY);
+    solid = generateFlatPlate(shapeCx, shapeCy, CHORD, aoaDeg, NX, NY);
   } else {
-    solid = generateNACA0012(SHAPE_CX, SHAPE_CY, CHORD, aoaDeg, NX, NY);
+    solid = generateNACA0012(shapeCx, shapeCy, CHORD, aoaDeg, NX, NY);
   }
   gl.activeTexture(gl.TEXTURE3);
   gl.deleteTexture(solidTex);
-  gl.deleteTexture(solidTexDisplay);
   solidTex = createSolidTexture(solid, gl.NEAREST);
-  solidTexDisplay = createSolidTexture(solid, gl.LINEAR);
 }
 
 let uInlet = 0.1;
@@ -117,6 +167,8 @@ document.body.appendChild(createReadoutPanel(MAX_SPEED));
 initTextures(uInlet);
 
 (window as any).__resetSim = () => {
+  shapeCx = 110; shapeCy = 75;
+  regenerateSolid();
   initTextures(uInlet);
   frameCount = 0;
 };
@@ -149,6 +201,31 @@ document.addEventListener("keydown", (ev: KeyboardEvent) => {
   }
 });
 
+let dragging = false;
+let dragOffX = 0, dragOffY = 0;
+vecCanvas.addEventListener("pointerdown", (e) => {
+  if (e.button !== 0) return;
+  const cx = invGx(e.offsetX), cy = invGy(e.offsetY);
+  const hitR = shapeKind === "circle" ? CIRCLE_RADIUS : CHORD / 2;
+  if (Math.hypot(cx - shapeCx, cy - shapeCy) > hitR + 8) return;
+  dragging = true;
+  dragOffX = shapeCx - cx; dragOffY = shapeCy - cy;
+  vecCanvas.setPointerCapture(e.pointerId);
+});
+vecCanvas.addEventListener("pointermove", (e) => {
+  const mx = invGx(e.offsetX), my = invGy(e.offsetY);
+  const hitR = shapeKind === "circle" ? CIRCLE_RADIUS : CHORD / 2;
+  const near = Math.hypot(mx - shapeCx, my - shapeCy) <= hitR + 8;
+  vecCanvas.style.cursor = dragging ? "grabbing" : near ? "grab" : "default";
+  if (!dragging) return;
+  const margin = shapeKind === "circle" ? CIRCLE_RADIUS : CHORD / 2;
+  shapeCx = Math.max(margin + 2, Math.min(NX - margin - 2, mx + dragOffX));
+  shapeCy = Math.max(margin + 2, Math.min(NY - margin - 2, my + dragOffY));
+  regenerateSolid();  // ponytail: no initTextures — keeps flow field
+});
+vecCanvas.addEventListener("pointerup", () => { dragging = false; });
+vecCanvas.addEventListener("pointercancel", () => { dragging = false; });
+
 const tmpFb = gl.createFramebuffer()!;
 let frameCount = 0;
 let paused = false;
@@ -156,10 +233,10 @@ let paused = false;
 function computeForces(): { drag: number; lift: number } {
   let fx = 0, fy = 0;
   const extent = shapeKind === "circle" ? CIRCLE_RADIUS + 2 : CHORD / 2 + 4;
-  const minX = Math.max(0, SHAPE_CX - extent);
-  const maxX = Math.min(NX - 1, SHAPE_CX + extent);
-  const minY = Math.max(0, SHAPE_CY - extent);
-  const maxY = Math.min(NY - 1, SHAPE_CY + extent);
+  const minX = Math.max(0, shapeCx - extent);
+  const maxX = Math.min(NX - 1, shapeCx + extent);
+  const minY = Math.max(0, shapeCy - extent);
+  const maxY = Math.min(NY - 1, shapeCy + extent);
   const bw = maxX - minX + 1, bh = maxY - minY + 1;
   const bufSize = bw * bh * 4;
   const texData = [new Float32Array(bufSize), new Float32Array(bufSize), new Float32Array(bufSize)];
@@ -222,25 +299,27 @@ let lastLift = 0;
 const SCALE = 3;
 
 function gx(x: number): number { return (x / NX) * vecCanvas.width; }
-function gy(y: number): number { return (y / NY) * vecCanvas.height; }
+function gy(y: number): number { return ((NY - y) / NY) * vecCanvas.height; }
+function invGx(px: number): number { return (px / vecCanvas.width) * NX; }
+function invGy(py: number): number { return NY - (py / vecCanvas.height) * NY; }
 
 function drawShapeOutline(): void {
   vctx.save();
   if (shapeKind === "circle") {
-    const cx = gx(SHAPE_CX), cy = gy(SHAPE_CY);
+    const cx = gx(shapeCx), cy = gy(shapeCy);
     const rx = (CIRCLE_RADIUS / NX) * vecCanvas.width;
     const ry = (CIRCLE_RADIUS / NY) * vecCanvas.height;
     vctx.beginPath();
     vctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
   } else if (shapeKind === "flat-plate") {
-    const pts = getFlatPlateOutlinePoints(SHAPE_CX, SHAPE_CY, CHORD, aoaDeg);
+    const pts = getFlatPlateOutlinePoints(shapeCx, shapeCy, CHORD, aoaDeg);
     vctx.beginPath();
     const s = pts.map(([px, py]) => [gx(px), gy(py)] as [number, number]);
     vctx.moveTo(s[0][0], s[0][1]);
     for (let i = 1; i < s.length; i++) vctx.lineTo(s[i][0], s[i][1]);
     vctx.closePath();
   } else {
-    const pts = getNACAOutlinePoints(SHAPE_CX, SHAPE_CY, CHORD, aoaDeg, 60);
+    const pts = getNACAOutlinePoints(shapeCx, shapeCy, CHORD, aoaDeg, 60);
     const s = pts.map(([px, py]) => [gx(px), gy(py)] as [number, number]);
     vctx.beginPath();
     vctx.moveTo(s[0][0], s[0][1]);
@@ -259,10 +338,15 @@ function drawVectors(drag: number, lift: number): void {
   resizeVecCanvas();
   vctx.clearRect(0, 0, vecCanvas.width, vecCanvas.height);
 
+  const partEnabled = (ctrlPanel as any).__particles?.value ?? true;
+  if (partEnabled) {
+    particles.draw(vctx, gx, gy, MAX_SPEED, vecCanvas.width, vecCanvas.height);
+  }
+
   drawShapeOutline();
 
-  const ox = gx(SHAPE_CX);
-  const oy = gy(SHAPE_CY);
+  const ox = gx(shapeCx);
+  const oy = gy(shapeCy);
 
   const maxF = Math.max(1, Math.abs(drag), Math.abs(lift));
   const ld = (drag / maxF) * 60 * SCALE;
@@ -315,7 +399,24 @@ function frame(): void {
     }
   }
 
-  runDisplay(gl, pp.read, solidTexDisplay, NX, NY, canvas.width, canvas.height, MAX_SPEED);
+  runVelocityExport(gl, velBuf, pp.read, NX, NY);
+  const velData = readVelocityBack(gl, velBuf, NX, NY);
+  particles.setVelocityField(velData);
+
+  particles.update(solid);
+
+  const cw = canvas.width, ch = canvas.height;
+  const WIDE = 3;
+  const WIDE_WEIGHT = 0.1;
+  const SATURATION = 1.3;
+  ensureBlurBuffers(cw, ch);
+
+  runDisplay(gl, pp.read, NX, NY, cw, ch, MAX_SPEED, colorFbo);
+  runBlurPass(gl, colorTex!, solidTex, blurFbo, 1 / NX, 0, cw, ch);
+  runBlurPass(gl, blurTex!, solidTex, wideFbo, 0, 1 / NY, cw, ch);
+  runBlurPass(gl, colorTex!, solidTex, blurFbo, WIDE / NX, 0, cw, ch);
+  runBlurPass(gl, blurTex!, solidTex, colorFbo, 0, WIDE / NY, cw, ch);
+  runComposite(gl, wideTex!, colorTex!, WIDE_WEIGHT, SATURATION, cw, ch);
 
   if (frameCount++ > 60 && frameCount % 6 === 0) {
     const { drag, lift } = computeForces();

@@ -9,7 +9,6 @@ precision highp float;
 uniform sampler2D u_f0;
 uniform sampler2D u_f1;
 uniform sampler2D u_f2;
-uniform sampler2D u_solid;
 uniform vec2 u_texScale;
 uniform vec2 u_invScreen;
 uniform float u_maxSpeed;
@@ -37,10 +36,6 @@ vec3 colormap(float t) {
   return mix(c[i], c[min(i + 1, 6)], f);
 }
 
-bool isSolid(vec2 uv) {
-  return texture(u_solid, uv).r > 0.5;
-}
-
 vec2 calcVel(ivec2 p) {
   vec4 t0 = texelFetch(u_f0, p, 0);
   vec4 t1 = texelFetch(u_f1, p, 0);
@@ -55,13 +50,7 @@ vec2 calcVel(ivec2 p) {
 }
 
 void main() {
-  vec2 uv = gl_FragCoord.xy * u_invScreen;
   ivec2 p = ivec2(gl_FragCoord.xy * u_texScale);
-
-  if (isSolid(uv)) {
-    outColor = vec4(0.25, 0.25, 0.26, 1.0);
-    return;
-  }
 
   vec2 vel = calcVel(p);
   float speed = length(vel);
@@ -70,39 +59,24 @@ void main() {
 }
 `;
 
-import { ensureQuad } from "./lbm-shader";
+import { ensureQuad, compileShader, linkProgram } from "./lbm-shader";
 
 let displayProg: WebGLProgram | null = null;
 let u_f0: WebGLUniformLocation | null = null;
 let u_f1: WebGLUniformLocation | null = null;
 let u_f2: WebGLUniformLocation | null = null;
-let u_solid: WebGLUniformLocation | null = null;
 let u_texScale: WebGLUniformLocation | null = null;
 let u_invScreen: WebGLUniformLocation | null = null;
 let u_maxSpeed: WebGLUniformLocation | null = null;
 
-function compile(gl: WebGL2RenderingContext, type: number, src: string): WebGLShader {
-  const s = gl.createShader(type)!;
-  gl.shaderSource(s, src);
-  gl.compileShader(s);
-  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s) || "compile error");
-  return s;
-}
-
 export function createDisplayProgram(gl: WebGL2RenderingContext): void {
-  const vs = compile(gl, gl.VERTEX_SHADER, DISPLAY_VS);
-  const fs = compile(gl, gl.FRAGMENT_SHADER, DISPLAY_FS);
-
-  displayProg = gl.createProgram()!;
-  gl.attachShader(displayProg, vs);
-  gl.attachShader(displayProg, fs);
-  gl.linkProgram(displayProg);
-  if (!gl.getProgramParameter(displayProg, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(displayProg) || "link error");
+  const vs = compileShader(gl, gl.VERTEX_SHADER, DISPLAY_VS);
+  const fs = compileShader(gl, gl.FRAGMENT_SHADER, DISPLAY_FS);
+  displayProg = linkProgram(gl, vs, fs);
 
   u_f0 = gl.getUniformLocation(displayProg, "u_f0");
   u_f1 = gl.getUniformLocation(displayProg, "u_f1");
   u_f2 = gl.getUniformLocation(displayProg, "u_f2");
-  u_solid = gl.getUniformLocation(displayProg, "u_solid");
   u_texScale = gl.getUniformLocation(displayProg, "u_texScale");
   u_invScreen = gl.getUniformLocation(displayProg, "u_invScreen");
   u_maxSpeed = gl.getUniformLocation(displayProg, "u_maxSpeed");
@@ -111,14 +85,14 @@ export function createDisplayProgram(gl: WebGL2RenderingContext): void {
 export function runDisplay(
   gl: WebGL2RenderingContext,
   ppRead: { tex: [WebGLTexture, WebGLTexture, WebGLTexture] },
-  solidTexDisplay: WebGLTexture | null,
   nx: number,
   ny: number,
   canvasW: number,
   canvasH: number,
   maxSpeed: number,
+  dstFbo?: WebGLFramebuffer | null,
 ): void {
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, dstFbo ?? null);
   gl.viewport(0, 0, canvasW, canvasH);
   gl.useProgram(displayProg!);
 
@@ -131,9 +105,6 @@ export function runDisplay(
   gl.activeTexture(gl.TEXTURE2);
   gl.bindTexture(gl.TEXTURE_2D, ppRead.tex[2]);
   gl.uniform1i(u_f2!, 2);
-  gl.activeTexture(gl.TEXTURE3);
-  gl.bindTexture(gl.TEXTURE_2D, solidTexDisplay);
-  gl.uniform1i(u_solid!, 3);
 
   gl.uniform2f(u_texScale!, nx / canvasW, ny / canvasH);
   gl.uniform2f(u_invScreen!, 1 / canvasW, 1 / canvasH);

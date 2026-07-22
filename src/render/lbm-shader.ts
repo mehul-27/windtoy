@@ -149,7 +149,7 @@ void main() {
 }
 `;
 
-function compileShader(gl: WebGL2RenderingContext, type: number, src: string): WebGLShader {
+export function compileShader(gl: WebGL2RenderingContext, type: number, src: string): WebGLShader {
   const s = gl.createShader(type)!;
   gl.shaderSource(s, src);
   gl.compileShader(s);
@@ -159,7 +159,7 @@ function compileShader(gl: WebGL2RenderingContext, type: number, src: string): W
   return s;
 }
 
-function linkProgram(gl: WebGL2RenderingContext, vs: WebGLShader, fs: WebGLShader): WebGLProgram {
+export function linkProgram(gl: WebGL2RenderingContext, vs: WebGLShader, fs: WebGLShader): WebGLProgram {
   const p = gl.createProgram()!;
   gl.attachShader(p, vs);
   gl.attachShader(p, fs);

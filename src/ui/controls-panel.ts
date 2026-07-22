@@ -212,6 +212,25 @@ export function createControlsPanel(config: SimConfig): HTMLDivElement {
   reRow.appendChild(reInp);
   panel.appendChild(reRow);
 
+  panel.appendChild(sep());
+
+  const particles = { value: true };
+  const partRow = document.createElement("div");
+  partRow.style.cssText = "display:flex;align-items:center;gap:6px;margin-bottom:2px";
+  const partCb = document.createElement("input");
+  partCb.type = "checkbox";
+  partCb.id = "chk-particles";
+  partCb.checked = true;
+  partCb.style.cssText = "accent-color:var(--accent,#5eb0ef);cursor:pointer";
+  partCb.addEventListener("change", () => { particles.value = partCb.checked; });
+  const partLbl = document.createElement("label");
+  partLbl.htmlFor = "chk-particles";
+  partLbl.textContent = "Particles";
+  partLbl.style.cssText = "color:var(--dim,#9aa3af);font-size:11px;cursor:pointer";
+  partRow.appendChild(partCb);
+  partRow.appendChild(partLbl);
+  panel.appendChild(partRow);
+
   toggle.addEventListener("click", () => {
     panel.style.display = "";
     toggle.style.display = "none";
@@ -219,5 +238,6 @@ export function createControlsPanel(config: SimConfig): HTMLDivElement {
 
   outer.appendChild(panel);
   (outer as any).__paused = paused;
+  (outer as any).__particles = particles;
   return outer;
 }
