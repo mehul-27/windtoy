@@ -180,7 +180,7 @@ export function createControlsPanel(config: SimConfig): HTMLDivElement {
   speedVal.style.cssText = "color:var(--fg,#e6e8ec);font-size:11px;float:right";
   speedLbl.appendChild(speedVal);
   speedRow.appendChild(speedLbl);
-  const speedInp = makeSlider(0.01, 0.25, 0.001, config.uInlet, (v) => {
+  const speedInp = makeSlider(0.01, 0.15, 0.001, config.uInlet, (v) => {
     config.uInlet = v;
     speedVal.textContent = v.toFixed(3);
     config.onUpdate();
@@ -203,7 +203,7 @@ export function createControlsPanel(config: SimConfig): HTMLDivElement {
   reRow.appendChild(reLbl);
   const reInp = makeSlider(1, 200, 1, reInit, (v) => {
     const nu = (1 / 3) * (config.tau - 0.5);
-    config.uInlet = Math.min(0.25, Math.max(0.01, v * nu / charLen));
+    config.uInlet = Math.min(0.15, Math.max(0.01, v * nu / charLen));
     speedVal.textContent = config.uInlet.toFixed(3);
     reVal.textContent = String(Math.round(v));
     speedInp.value = String(config.uInlet);

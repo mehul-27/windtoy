@@ -144,7 +144,7 @@ document.addEventListener("keydown", (ev: KeyboardEvent) => {
     config.uInlet = Math.max(0.01, config.uInlet - 0.01);
     config.onUpdate();
   } else if (ev.key === "]") {
-    config.uInlet = Math.min(0.25, config.uInlet + 0.01);
+    config.uInlet = Math.min(0.15, config.uInlet + 0.01);
     config.onUpdate();
   }
 });
