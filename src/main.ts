@@ -114,6 +114,7 @@ const config: SimConfig = {
 const ctrlPanel = createControlsPanel(config);
 document.body.appendChild(ctrlPanel);
 document.body.appendChild(createReadoutPanel(MAX_SPEED));
+initTextures(uInlet);
 
 (window as any).__resetSim = () => {
   initTextures(uInlet);
