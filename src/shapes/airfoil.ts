@@ -1,5 +1,22 @@
 import { HALF_DIAG } from "./rasterize";
 
+// Single shared rotation: rotate point around pivot (cx,cy) by AoA.
+// toLocal=true:  (px,py) in grid coords → returns (lx,ly) in local coords relative to pivot
+// toLocal=false: (lx,ly) in local coords relative to pivot → returns (px,py) in grid coords
+function rotatePivot(
+  px: number, py: number,
+  cx: number, cy: number,
+  cosA: number, sinA: number,
+  toLocal: boolean,
+): [number, number] {
+  if (toLocal) {
+    const dx = px - cx;
+    const dy = py - cy;
+    return [dx * cosA + dy * sinA, -dx * sinA + dy * cosA];
+  }
+  return [px * cosA - py * sinA + cx, px * sinA + py * cosA + cy];
+}
+
 export function generateFlatPlate(
   cx: number, cy: number,
   chord: number, aoaDeg: number,
@@ -14,10 +31,7 @@ export function generateFlatPlate(
 
   for (let y = 0; y < ny; y++) {
     for (let x = 0; x < nx; x++) {
-      const dx = x - cx;
-      const dy = y - cy;
-      const lx = dx * cosA + dy * sinA;
-      const ly = -dx * sinA + dy * cosA;
+      const [lx, ly] = rotatePivot(x, y, cx, cy, cosA, sinA, true);
       if (Math.abs(lx) <= halfChord && Math.abs(ly) <= halfThick) {
         solid[y * nx + x] = true;
       }
@@ -40,10 +54,8 @@ export function generateNACA0012(
 
   for (let y = 0; y < ny; y++) {
     for (let x = 0; x < nx; x++) {
-      const dx = x - cx;
-      const dy = y - cy;
-      const lx = dx * cosA + dy * sinA + chord * 0.25;
-      const ly = -dx * sinA + dy * cosA;
+      const [lx0, ly] = rotatePivot(x, y, cx, cy, cosA, sinA, true);
+      const lx = lx0 + chord * 0.25;
       if (lx < 0 || lx > chord) continue;
       const xc = lx / chord;
       const yt = factor * chord * (
@@ -84,17 +96,21 @@ export function getNACAOutlinePoints(
   for (let i = 0; i <= n; i++) {
     const xc = i / n;
     const yt = nacaY(xc);
-    const lx = xc * chord - chord * 0.25;
-    const ly = yt;
-    pts.push([lx * cosA - ly * sinA + cx, lx * sinA + ly * cosA + cy]);
+    const [gx, gy] = rotatePivot(
+      xc * chord - chord * 0.25, yt,
+      cx, cy, cosA, sinA, false,
+    );
+    pts.push([gx, gy]);
   }
   // Lower surface: TE → LE
   for (let i = n; i >= 0; i--) {
     const xc = i / n;
     const yt = nacaY(xc);
-    const lx = xc * chord - chord * 0.25;
-    const ly = -yt;
-    pts.push([lx * cosA - ly * sinA + cx, lx * sinA + ly * cosA + cy]);
+    const [gx, gy] = rotatePivot(
+      xc * chord - chord * 0.25, -yt,
+      cx, cy, cosA, sinA, false,
+    );
+    pts.push([gx, gy]);
   }
   return pts;
 }
@@ -114,8 +130,7 @@ export function getFlatPlateOutlinePoints(
     [halfChord, h],
     [-halfChord, h],
   ];
-  return corners.map(([lx, ly]) => [
-    lx * cosA - ly * sinA + cx,
-    lx * sinA + ly * cosA + cy,
-  ]);
+  return corners.map(([lx, ly]) =>
+    rotatePivot(lx, ly, cx, cy, cosA, sinA, false),
+  );
 }
