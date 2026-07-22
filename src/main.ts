@@ -209,8 +209,8 @@ function computeForces(): { drag: number; lift: number } {
 }
 
 function resizeVecCanvas(): void {
-  const w = window.innerWidth;
-  const h = window.innerHeight;
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
   if (vecCanvas.width !== w || vecCanvas.height !== h) {
     vecCanvas.width = w;
     vecCanvas.height = h;
