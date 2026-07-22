@@ -217,7 +217,7 @@ export function createControlsPanel(config: SimConfig): HTMLDivElement {
     toggle.style.display = "none";
   });
 
-  (panel as any).__paused = paused;
   outer.appendChild(panel);
+  (outer as any).__paused = paused;
   return outer;
 }
