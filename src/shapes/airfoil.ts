@@ -40,6 +40,16 @@ export function generateFlatPlate(
   return solid;
 }
 
+function nacaHalfThickness(xc: number, chord: number): number {
+  return 0.6 * chord * (
+    0.2969 * Math.sqrt(xc)
+    - 0.1260 * xc
+    - 0.3516 * xc * xc
+    + 0.2843 * xc * xc * xc
+    - 0.1015 * xc * xc * xc * xc
+  );
+}
+
 export function generateNACA0012(
   cx: number, cy: number,
   chord: number, aoaDeg: number,
@@ -49,22 +59,13 @@ export function generateNACA0012(
   const aoa = aoaDeg * Math.PI / 180;
   const cosA = Math.cos(aoa);
   const sinA = Math.sin(aoa);
-  const t = 0.12;
-  const factor = 5 * t;
 
   for (let y = 0; y < ny; y++) {
     for (let x = 0; x < nx; x++) {
       const [lx0, ly] = rotatePivot(x, y, cx, cy, cosA, sinA, true);
       const lx = lx0 + chord * 0.25;
       if (lx < 0 || lx > chord) continue;
-      const xc = lx / chord;
-      const yt = factor * chord * (
-        0.2969 * Math.sqrt(xc)
-        - 0.1260 * xc
-        - 0.3516 * xc * xc
-        + 0.2843 * xc * xc * xc
-        - 0.1015 * xc * xc * xc * xc
-      );
+      const yt = nacaHalfThickness(lx / chord, chord);
       if (Math.abs(ly) <= yt + HALF_DIAG) {
         solid[y * nx + x] = true;
       }
@@ -81,21 +82,12 @@ export function getNACAOutlinePoints(
   const aoa = aoaDeg * Math.PI / 180;
   const cosA = Math.cos(aoa);
   const sinA = Math.sin(aoa);
-  const t = 0.12;
-  const factor = 5 * t;
   const pts: [number, number][] = [];
-  const nacaY = (xc: number) => factor * chord * (
-    0.2969 * Math.sqrt(xc)
-    - 0.1260 * xc
-    - 0.3516 * xc * xc
-    + 0.2843 * xc * xc * xc
-    - 0.1015 * xc * xc * xc * xc
-  );
 
   // Upper surface: LE → TE
   for (let i = 0; i <= n; i++) {
     const xc = i / n;
-    const yt = nacaY(xc);
+    const yt = nacaHalfThickness(xc, chord);
     const [gx, gy] = rotatePivot(
       xc * chord - chord * 0.25, yt,
       cx, cy, cosA, sinA, false,
@@ -105,7 +97,7 @@ export function getNACAOutlinePoints(
   // Lower surface: TE → LE
   for (let i = n; i >= 0; i--) {
     const xc = i / n;
-    const yt = nacaY(xc);
+    const yt = nacaHalfThickness(xc, chord);
     const [gx, gy] = rotatePivot(
       xc * chord - chord * 0.25, -yt,
       cx, cy, cosA, sinA, false,
