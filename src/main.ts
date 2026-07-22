@@ -228,9 +228,10 @@ function drawShapeOutline(): void {
   vctx.save();
   if (shapeKind === "circle") {
     const cx = gx(SHAPE_CX), cy = gy(SHAPE_CY);
-    const r = (CIRCLE_RADIUS / NX) * vecCanvas.width;
+    const rx = (CIRCLE_RADIUS / NX) * vecCanvas.width;
+    const ry = (CIRCLE_RADIUS / NY) * vecCanvas.height;
     vctx.beginPath();
-    vctx.arc(cx, cy, r, 0, Math.PI * 2);
+    vctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
   } else if (shapeKind === "flat-plate") {
     const pts = getFlatPlateOutlinePoints(SHAPE_CX, SHAPE_CY, CHORD, aoaDeg);
     vctx.beginPath();
